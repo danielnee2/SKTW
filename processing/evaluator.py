@@ -3,8 +3,10 @@ import numpy as np
 import sys
 import traceback
 from tqdm.auto import tqdm
+import git
 
-csv_to_score = '../sample_submission.csv'
+homedir = git.Repo("./", search_parent_directories=True).working_dir
+csv_to_score = f'{homedir}/submissions/submission_naiveDTW_0427_1524.csv'#f'{homedir}/JK/First91days_highlowdeath_daily.csv'
 
 def get_date(x):
     return '-'.join(x.split('-')[:3])
@@ -32,15 +34,15 @@ def evaluate(test_df, user_df):
         total_loss += pinball_loss(join_df['deaths'].values, join_df[column].values, quantile) / 9.0
     return total_loss
 
-start_date = '2020-04-17' # First date to include in scoring
+start_date = '2020-04-24' #'2020-04-17' # First date to include in scoring
 
-daily_df = pd.read_csv('../data/us/covid/nyt_us_counties_daily.csv')
-end_date = daily_df['date'].max()
+daily_df = pd.read_csv(f'{homedir}/data/us/covid/nyt_us_counties_daily.csv')
+end_date = '2020-04-24' #daily_df['date'].max()
 daily_df['id'] = daily_df['date'] +'-'+ daily_df['fips'].astype(str)
 preperiod_df = daily_df[(daily_df['date'] < start_date)]
 daily_df = daily_df[(daily_df['date'] <= end_date)  & (daily_df['date'] >= start_date)]
 
-sample_submission = pd.read_csv('../sample_submission.csv') # Load the sample submission with all 0's
+sample_submission = pd.read_csv(f'{homedir}/sample_submission.csv') # Load the sample submission with all 0's
 sample_submission['date'] = sample_submission['id'].apply(get_date)
 sample_submission['fips'] = sample_submission['id'].apply(get_fips).astype('int')
 sample_submission = sample_submission[(sample_submission['date'] <= end_date)  & (sample_submission['date'] >= start_date)]
