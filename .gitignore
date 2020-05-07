@@ -1376,3 +1376,5 @@ data/us/air_quality/1/1/out/HourlyAQObs_2020013120.dat
 data/us/air_quality/1/1/out/HourlyAQObs_2020013121.dat
 
 data/us/air_quality/1/1/out/HourlyAQObs_2020013122.dat
+
+sample_submission_condRNN_fullTraining.csv
