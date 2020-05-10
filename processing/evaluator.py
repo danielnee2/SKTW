@@ -52,7 +52,7 @@ sample_submission = sample_submission[(sample_submission['date'] <= end_date)  &
 # New_active_fips are FIPS that were introduced into the dataset during the scoring period. 
 # Active FIPS should be scored against deaths data from NYT if such data is available, 
 # but Inactive FIPS should be scored with a target of 0.
-disabled_fips = {36061}
+disabled_fips = set({})
 prev_active_fips = set(preperiod_df.fips.unique())
 curr_active_fips = set(daily_df.fips.unique())
 all_fips = set(sample_submission.fips.unique())
