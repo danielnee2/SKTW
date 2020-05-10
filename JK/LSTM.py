@@ -138,10 +138,12 @@ def predict_future(model_qntl, dataList, scaler, target_idx, FIPS=None, date_ed=
     prediction_future = []
     for i in range(len(model_qntl)):
         prediction_future.append(sigma*model_qntl[i].predict(X_future)+mu)
+    prediction_future = np.asarray(prediction_future)
 
     if (FIPS is None) or (date_ed is None):
         return np.asarray(prediction_future)
     else:
+        print('Saving future prediction.')
         df_future = []
         for i, fips in enumerate(FIPS):
             for j in range(target_size):

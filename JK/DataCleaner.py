@@ -1,4 +1,5 @@
 import os
+import json
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -10,6 +11,7 @@ homedir = get_homedir()
 PATH_DEMO = f"{homedir}/data/us/aggregate_berkeley.csv"
 PATH_MT = f"{homedir}/data/us/covid/nyt_us_counties.csv"
 PATH_MB = f"{homedir}/data/us/mobility/DL-us-mobility-daterow.csv"
+PATH_SS = f"{homedir}/exploratory_HJo/seasonality_stateLevel.csv"
 PATH_CLUSTER = f'{homedir}/JK/clustering/n_clusters=5_kmeans_extended.txt'
 ON_CLUSTER = True
 
@@ -18,6 +20,16 @@ ON_CLUSTER = True
 FIPS_mapping, FIPS_full = get_FIPS(reduced=True)
 oneweek = pd.Timedelta(days=7)
 md_now = pd.Timestamp.now().strftime('%m%d')
+
+"""
+Read State-FIPS dictionary to be used in seasonality data.
+"""
+with open(f'{homedir}/JK/po_code_state_map.json') as f:
+    po_st = json.load(f)
+
+st_to_fips = {}
+for dic in po_st:
+    st_to_fips[dic['state']] = dic['fips']
 
 """
 Read the datasets.
@@ -77,6 +89,11 @@ mobility['fips'] = mobility['fips'].apply(correct_FIPS)
 mobility.drop(columns=['admin_level', 'samples'], inplace=True)
 mobility = fix_FIPS(mobility, fipslabel='fips', datelabel='date', reduced=True)
 
+seasonality = pd.read_csv(f'{homedir}/exploratory_HJo/seasonality_stateLevel.csv', index_col=0, parse_dates=['date'])
+seasonality['date'] += pd.Timedelta(days = 365*3)
+seasonality.replace({'state':st_to_fips}, inplace=True)
+seasonality.replace({'state':{'New York City':'36061'}}, inplace=True)
+
 FIPS_demo = set(demo['fips']); FIPS_mt = set(motality['fips']); FIPS_mb = set(mobility['fips'])
 
 date_st_mt = motality['date'].min(); date_ed_mt = motality['date'].max()
@@ -135,7 +152,7 @@ date_win = pd.date_range(start=date_st, end=date_ed)
 columns_demo = list(demo.columns); columns_demo.remove('fips')
 columns_mt = ['cases', 'deaths']
 columns_mb = ['m50', 'm50_index']
-columns_season = ['seasonality']
+columns_ss = ['seasonality']
 
 print('# Demographic FIPS=', len(FIPS_demo), ', # Motality FIPS=', len(FIPS_mt), ', # Mobility FIPS=', len(FIPS_mb))
 print('First date to be trained:', date_st, ', Final date to be trained:', date_ed)
@@ -169,7 +186,13 @@ if ON_CLUSTER:
             data3 = mobility[(mobility['fips']==fips) & (mobility['date'].isin(date_win))][['date']+columns_mb]
             data3 = data3.sort_values(by=['date'])[columns_mb].to_numpy()
 
-            dataList.append(np.hstack((data1, data2, data3)))
+            if fips == '36061':             # New York City
+                data4 = seasonality[(seasonality['state']==fips) & (seasonality['date'].isin(date_win))][['date']+columns_ss]
+            else:
+                data4 = seasonality[(seasonality['state']==fips[:2]) & (seasonality['date'].isin(date_win))][['date']+columns_ss]
+            data4 = data4.sort_values(by=['date'])[columns_ss].to_numpy()
+
+            dataList.append(np.hstack((data1, data2, data3, data4)))
         np.save(f'{homedir}/JK/preprocessing/{md_now}/dataList_cls={c}.npy', np.asarray(dataList, dtype=np.float64))
         with open(f'{homedir}/JK/preprocessing/{md_now}/FIPS_cluster_cls={c}.txt', 'w') as f:
             print(FIPS_cluster[c], file=f)
