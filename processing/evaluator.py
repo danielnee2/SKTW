@@ -6,7 +6,7 @@ from tqdm.auto import tqdm
 import git
 
 homedir = git.Repo("./", search_parent_directories=True).working_dir
-csv_to_score = f'{homedir}/submissions/submission_naiveDTW_0427_1524.csv'#f'{homedir}/JK/First91days_highlowdeath_daily.csv'
+csv_to_score = f'{homedir}/JK/First91days_highlowdeath_daily.csv'#f'{homedir}/submissions/submission_fbprophet_0502_0116.csv'
 
 def get_date(x):
     return '-'.join(x.split('-')[:3])
@@ -34,10 +34,10 @@ def evaluate(test_df, user_df):
         total_loss += pinball_loss(join_df['deaths'].values, join_df[column].values, quantile) / 9.0
     return total_loss
 
-start_date = '2020-04-24' #'2020-04-17' # First date to include in scoring
+start_date = '2020-04-25' #'2020-04-17' # First date to include in scoring
 
 daily_df = pd.read_csv(f'{homedir}/data/us/covid/nyt_us_counties_daily.csv')
-end_date = '2020-04-24' #daily_df['date'].max()
+end_date = '2020-04-25' #daily_df['date'].max()
 daily_df['id'] = daily_df['date'] +'-'+ daily_df['fips'].astype(str)
 preperiod_df = daily_df[(daily_df['date'] < start_date)]
 daily_df = daily_df[(daily_df['date'] <= end_date)  & (daily_df['date'] >= start_date)]

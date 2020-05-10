@@ -23,10 +23,10 @@ def get_FIPS(path='/JK/FIPS_mapping.txt', reduced=False):
     (reduced=False) Convert prediction data into submission format
 
     Returns:
-      FIPS_mapping: 
-        dictionary with key=FIPS to be replaced, value=replaced FIPS.
-      FIPS_full:
-        list of full FIPS.
+      FIPS_mapping: dict
+        Dictionary with key=FIPS to be replaced, value=replaced FIPS.
+      FIPS_full: list
+        List of full FIPS.
         Same as list(FIPS_mapping.values())
     """
     homedir = get_homedir()
@@ -77,13 +77,15 @@ def fix_FIPS(df, fipslabel=None, datelabel=None, **kwargs):
             It returns a dataframe, not done in place.
     
     Parameters:
-      df:
-        A dataframe with FIPS column.
+      df: pandas DataFrame
+        Dataframe with FIPS column.
         Can be wide(having one column per date) or tidy(having single column of dates).
-      fipslabel:
+      fipslabel: str, None (default=None)
         Name of the FIPS column.
-      datelabel:
+      datelabel: str, None (default=None)
         Name of the date column, only necessary when df is tidy.
+      **kwargs:
+        Additional kwargs are passed to get_FIPS.
 
     Returns:
         Modified dataframe.
@@ -100,3 +102,15 @@ def fix_FIPS(df, fipslabel=None, datelabel=None, **kwargs):
             # return df_modified.groupby([datelabel, fipslabel], as_index=False).apply(lambda x: x.sum(min_count=1))
     else:
         return df
+
+def to_multi_idx(df, fipslabel='fips', datelabel='date'):
+    """
+    Combine FIPS and date columns into single multiindex.
+    """
+    from functools import reduce
+
+    reindexer = {}
+    for i in range(len(df)):
+        reindexer[df.index[i]] = reduce((lambda x, y: str(x)[:10]+f'-{int(y)}'), df.iloc[i][[datelabel, fipslabel]].tolist())
+
+    return df.rename(index=reindexer).rename_axis('id').drop([datelabel, fipslabel], axis=1)
