@@ -12,7 +12,7 @@ from cond_rnn import ConditionalRNN
 
 
 
-def concatDF_static(data1, column1, fipsList, df_death_accum, minDeathNumber = 0):
+def concatDF_static(data1, column1, fipsList, df_death_accum, minDeathNumber = 0, dic_cluster = []):
     # inputs
     #   data:               list of input dataframes
     #   columnName:         list of lists storing column names of input dataframes to be used
@@ -34,6 +34,8 @@ def concatDF_static(data1, column1, fipsList, df_death_accum, minDeathNumber = 0
         # for data1 (demographic)
         try: 
             data1 = data1_orig.loc[fips, column1].to_numpy()
+            if len(dic_cluster)!=0:
+                data1 = np.append(data1, dic_cluster[fips])
         except  KeyError:
             print('fips ', fips, 'not found')
             fips_noData.append(fips)
@@ -48,7 +50,7 @@ def concatDF_static(data1, column1, fipsList, df_death_accum, minDeathNumber = 0
 
 
 
-def concatDF_timeseries(data2, data3, data4, column2, column3, column4, fipsList, data_demo, fipsList_demo, date_st, date_ed, 
+def concatDF_timeseries(data2, data3, data4, column2, column3, column4, fipsList, df_fips2state, data_demo, fipsList_demo, date_st, date_ed, 
              df_death_accum, minDeathNumber = 0, smoothData = False, exp = 2, removeNeg = True, normalizeTarget = False):
     # inputs
     #   data:               list of input dataframes
@@ -117,8 +119,7 @@ def concatDF_timeseries(data2, data3, data4, column2, column3, column4, fipsList
             data3 = np.vstack( (data3, np.kron( np.ones((len(data2)-len(data3),1)), data3[-1, :]) ) )
         
         # for data4 (seasonality)
-        state = data_demo.loc[fips, 'State']
-        state = state[0:-1]
+        state = df_fips2state.loc[fips, 'state']
         data4 = data4_orig.loc[state, :]
         data4.set_index('date', inplace=True)
         data4 = data4.loc[date_st_seasonality:date_ed_seasonality, column4]
@@ -209,3 +210,77 @@ class condLSTM(tf.keras.Model):
 def quantileLoss(quantile, y_p, y):
     e = y_p - y
     return tf.keras.backend.mean(tf.keras.backend.maximum(quantile*e, (quantile-1)*e))
+
+
+class condLSTM_quantile(tf.keras.Model):
+    def __init__(self, NUM_CELLS, NUM_DAYS, quantileList):
+        super(condLSTM_quantile, self).__init__()
+        self.cond = ConditionalRNN(NUM_CELLS, cell='LSTM', dtype=tf.float32)
+        self.out = tf.keras.layers.Dense(units=NUM_DAYS)
+        self.quantileList = quantileList
+        self.num_quantiles = len(quantileList)
+        self.outputs = []
+        self.losses = []
+        
+        # Create outputs and losses for all quantiles
+        for i in range(self.num_quantiles):
+            q = self.quantileList[i]
+            
+            # Get output layers 
+            output = tf.keras.layers.Dense(units=NUM_DAYS)
+            self.outputs.append(output)
+            
+            # Create losses
+            error = tf.subtract(self.y, output)
+            loss = tf.reduce_mean(tf.maximum(q*error, (q-1)*error), axis=-1)
+
+            self.losses.append(loss)
+
+        # Create combined loss
+        self.combined_loss = tf.reduce_mean(tf.add_n(self.losses))
+        self.train_step = tf.train.AdamOptimizer().minimize(self.combined_loss)
+
+    def call(self, inputs, **kwargs):
+        o = self.cond(inputs)
+        o = self.out(o)
+        return o
+    
+    
+    
+    
+    
+    
+class condLSTM_quantile_test(tf.keras.Model):
+    def __init__(self, NUM_CELLS, NUM_DAYS, quantileList, activation = 'relu'):
+        super(condLSTM_quantile_test, self).__init__()
+        self.cond = ConditionalRNN(NUM_CELLS, cell='LSTM', activation=activation, dtype=tf.float32)
+        self.outs = []
+        self.losses = []
+        self.quantileList = quantileList
+        self.num_quantiles = len(quantileList)
+        
+        # Create outputs and losses for all quantiles
+        for i in range(self.num_quantiles):
+            q = self.quantileList[i]
+            
+            # Get output layers 
+            out = tf.keras.layers.Dense(units=NUM_DAYS)
+            self.outs.append(out)
+            
+            # Create losses
+            error = tf.subtract(self.y, output)
+            loss = tf.reduce_mean(tf.maximum(q*error, (q-1)*error), axis=-1)
+
+            self.losses.append(loss)
+
+        # Create combined loss
+        self.combined_loss = tf.reduce_mean(tf.add_n(self.losses))
+        self.train_step = tf.train.AdamOptimizer().minimize(self.combined_loss)
+
+    def call(self, inputs, **kwargs):
+        o = self.cond(inputs)
+        o = [x(o) for x in self.outs]
+        return o
+    
+def pinballLoss(y_true, y_pred):
+    error = [y_true - y for y in y_pred]
