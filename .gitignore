@@ -1378,3 +1378,37 @@ data/us/air_quality/1/1/out/HourlyAQObs_2020013121.dat
 data/us/air_quality/1/1/out/HourlyAQObs_2020013122.dat
 
 sample_submission_condRNN_fullTraining.csv
+
+sample_submission_condRNN_14DemoData_withTestResult.csv
+
+sample_submission_condRNN_allDemoData_withTestResult.csv
+
+sample_submission_condRNN_allDemoData.csv
+
+test_submission_condRNN_allDemoData_noCluster_17days.csv
+
+test_submission_condRNN_allDemoData_noCluster_7days.csv
+
+test_submission_condRNN_allDemoData_noCluster_rerun.csv
+
+test_submission_condRNN_allDemoData_noCluster.csv
+
+test_submission_condRNN_allDemoData_withCluster.csv
+
+test_submission_condRNN_allDemoData_withTestResultAndCluster.csv
+
+2ndSubmission_condRNN_allDemoData_noCluster_14days.csv
+
+exploratory_HJo/~$cond lstm optimization_epoch.xlsx
+
+exploratory_HJo/cond lstm optimization_epoch.xlsx
+
+exploratory_HJo/n_clusters=5_kmeans_extended.txt
+
+exploratory_HJo/trainingLoss_cond_rnn_allDemoData_withTestResult.txt
+
+exploratory_HJo/trainingLoss_cond_rnn_allDemoData.txt
+
+optimization_epoch.csv
+
+exploratory_HJo/evaluator_HJo.py
