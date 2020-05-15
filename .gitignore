@@ -1403,8 +1403,6 @@ exploratory_HJo/~$cond lstm optimization_epoch.xlsx
 
 exploratory_HJo/cond lstm optimization_epoch.xlsx
 
-exploratory_HJo/n_clusters=5_kmeans_extended.txt
-
 exploratory_HJo/trainingLoss_cond_rnn_allDemoData_withTestResult.txt
 
 exploratory_HJo/trainingLoss_cond_rnn_allDemoData.txt
@@ -1412,3 +1410,5 @@ exploratory_HJo/trainingLoss_cond_rnn_allDemoData.txt
 optimization_epoch.csv
 
 exploratory_HJo/evaluator_HJo.py
+
+exploratory_HJo/cond_rnn_script_v3_branchoff.ipynb
