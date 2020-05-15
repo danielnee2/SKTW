@@ -3,7 +3,6 @@ import json
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import plotly.express as px
 from utility import *
 
 homedir = get_homedir()
@@ -12,8 +11,7 @@ PATH_DEMO = f"{homedir}/data/us/aggregate_berkeley.csv"
 PATH_MT = f"{homedir}/data/us/covid/nyt_us_counties.csv"
 PATH_MB = f"{homedir}/data/us/mobility/DL-us-mobility-daterow.csv"
 PATH_SS = f"{homedir}/exploratory_HJo/seasonality_stateLevel.csv"
-PATH_CLUSTER = f'{homedir}/JK/clustering/n_clusters=5_kmeans_extended.txt'
-ON_CLUSTER = True
+PREPROCESSING = True
 
 ##################################################################################
 
@@ -62,8 +60,11 @@ motality_type = ['3-YrMortalityAge<1Year2015-17',
 
 demo = pd.DataFrame()
 demo['fips'] = berkeley['countyFIPS']
+demo['PopulationEstimate2018'] = berkeley['PopulationEstimate2018']
 demo['PopRatioMale2017'] = berkeley['PopTotalMale2017'] / (berkeley['PopTotalMale2017']+berkeley['PopTotalFemale2017'])
 demo['PopRatio65+2017'] = berkeley['PopulationEstimate65+2017'] / (berkeley['PopTotalMale2017']+berkeley['PopTotalFemale2017'])
+demo['MedianAge,Male2010'] = berkeley['MedianAge,Male2010']
+demo['MedianAge,Female2010'] = berkeley['MedianAge,Female2010']
 demo['PopulationDensityperSqMile2010'] = berkeley['PopulationDensityperSqMile2010']
 demo['MedicareEnrollment,AgedTot2017'] = berkeley['MedicareEnrollment,AgedTot2017'] / (berkeley['PopTotalMale2017']+berkeley['PopTotalFemale2017'])
 demo['#Hospitals'] = 20000 * berkeley['#Hospitals'] / (berkeley['PopTotalMale2017']+berkeley['PopTotalFemale2017'])
@@ -154,45 +155,39 @@ columns_mt = ['cases', 'deaths']
 columns_mb = ['m50', 'm50_index']
 columns_ss = ['seasonality']
 
+with open(f'{homedir}/JK/preprocessing/{md_now}/columns.txt', 'w') as f:
+    print(columns_demo+columns_mt+columns_mb+columns_ss, file=f)
+
 print('# Demographic FIPS=', len(FIPS_demo), ', # Motality FIPS=', len(FIPS_mt), ', # Mobility FIPS=', len(FIPS_mb))
 print('First date to be trained:', date_st, ', Final date to be trained:', date_ed)
 
-if ON_CLUSTER:
-    with open(PATH_CLUSTER, 'r') as f:
-        classes = eval(f.read())
+"""
+Generate training data
+in the order of demo-motal-mobi
+"""
+if PREPROCESSING:
+    data_ts = []
+    data_ctg = []
+    for fips in sorted(FIPS_demo):
+        data1 = demo[demo['fips']==fips][columns_demo].to_numpy()[0]
+        
+        data2 = motality[(motality['fips']==fips) & (motality['date'].isin(date_win))][['date']+columns_mt]
+        _ = [[dt, 0, 0] for dt in date_win if dt not in list(data2['date'])]
+        data2 = data2.append(pd.DataFrame(_, columns=['date']+columns_mt))
+        data2 = data2.sort_values(by=['date'])[columns_mt].to_numpy()
+        
+        data3 = mobility[(mobility['fips']==fips) & (mobility['date'].isin(date_win))][['date']+columns_mb]
+        data3 = data3.sort_values(by=['date'])[columns_mb].to_numpy()
 
-    cluster_size = max(classes.values()) # missing values are ignored
-    FIPS_cluster = [set() for _ in range(cluster_size)]
-    for fips, i in classes.items():
-        if i!=cluster_size:
-            FIPS_cluster[i].add(fips)
-    for i in range(len(FIPS_cluster)):
-        FIPS_cluster[i] = sorted(FIPS_cluster[i])
-    """
-    Generate training data
-    in the order of demo-motal-mobi
-    """
-    for c in range(len(FIPS_cluster)):
-        dataList = []
-        for fips in FIPS_cluster[c]:
-            data1 = demo[demo['fips']==fips][columns_demo].to_numpy()
-            data1 = np.repeat(data1, len(date_win), axis=0)
-            
-            data2 = motality[(motality['fips']==fips) & (motality['date'].isin(date_win))][['date']+columns_mt]
-            _ = [[dt, 0, 0] for dt in date_win if dt not in list(data2['date'])]
-            data2 = data2.append(pd.DataFrame(_, columns=['date']+columns_mt))
-            data2 = data2.sort_values(by=['date'])[columns_mt].to_numpy()
-            
-            data3 = mobility[(mobility['fips']==fips) & (mobility['date'].isin(date_win))][['date']+columns_mb]
-            data3 = data3.sort_values(by=['date'])[columns_mb].to_numpy()
+        if fips == '36061':             # New York City
+            data4 = seasonality[(seasonality['state']==fips) & (seasonality['date'].isin(date_win))][['date']+columns_ss]
+        else:
+            data4 = seasonality[(seasonality['state']==fips[:2]) & (seasonality['date'].isin(date_win))][['date']+columns_ss]
+        data4 = data4.sort_values(by=['date'])[columns_ss].to_numpy()
 
-            if fips == '36061':             # New York City
-                data4 = seasonality[(seasonality['state']==fips) & (seasonality['date'].isin(date_win))][['date']+columns_ss]
-            else:
-                data4 = seasonality[(seasonality['state']==fips[:2]) & (seasonality['date'].isin(date_win))][['date']+columns_ss]
-            data4 = data4.sort_values(by=['date'])[columns_ss].to_numpy()
-
-            dataList.append(np.hstack((data1, data2, data3, data4)))
-        np.save(f'{homedir}/JK/preprocessing/{md_now}/dataList_cls={c}.npy', np.asarray(dataList, dtype=np.float64))
-        with open(f'{homedir}/JK/preprocessing/{md_now}/FIPS_cluster_cls={c}.txt', 'w') as f:
-            print(FIPS_cluster[c], file=f)
+        data_ctg.append(data1)
+        data_ts.append(np.hstack((data2, data3, data4)))
+    np.save(f'{homedir}/JK/preprocessing/{md_now}/data_ctg.npy', np.asarray(data_ctg, dtype=np.float64))
+    np.save(f'{homedir}/JK/preprocessing/{md_now}/data_ts.npy', np.asarray(data_ts, dtype=np.float64))
+    with open(f'{homedir}/JK/preprocessing/{md_now}/FIPS.txt', 'w') as f:
+        print(sorted(FIPS_demo), file=f)
