@@ -8,9 +8,11 @@ from utility import *
 homedir = get_homedir()
 
 PATH_DEMO = f"{homedir}/data/us/aggregate_berkeley.csv"
+PATH_GDP = f"{homedir}/JK/GDP.csv"
 PATH_MT = f"{homedir}/data/us/covid/nyt_us_counties.csv"
 PATH_MB = f"{homedir}/data/us/mobility/DL-us-mobility-daterow.csv"
 PATH_SS = f"{homedir}/exploratory_HJo/seasonality_stateLevel.csv"
+PATH_POL = f"{homedir}/JK/policy.csv"
 PREPROCESSING = True
 
 ##################################################################################
@@ -79,6 +81,10 @@ demo['Smokers_Percentage'] = berkeley['Smokers_Percentage']
 
 demo.fillna(0, inplace=True)
 
+gdp = pd.read_csv(PATH_GDP)
+gdp['fips'] = gdp['fips'].apply(correct_FIPS)
+gdp = fix_FIPS(gdp, fipslabel='fips', reduced=True)
+
 motality = pd.read_csv(PATH_MT, parse_dates=['date'])
 motality.dropna(inplace=True)
 motality['fips'] = motality['fips'].apply(correct_FIPS)
@@ -90,12 +96,17 @@ mobility['fips'] = mobility['fips'].apply(correct_FIPS)
 mobility.drop(columns=['admin_level', 'samples'], inplace=True)
 mobility = fix_FIPS(mobility, fipslabel='fips', datelabel='date', reduced=True)
 
-seasonality = pd.read_csv(f'{homedir}/exploratory_HJo/seasonality_stateLevel.csv', index_col=0, parse_dates=['date'])
+seasonality = pd.read_csv(PATH_SS, index_col=0, parse_dates=['date'])
 seasonality['date'] += pd.Timedelta(days = 365*3)
 seasonality.replace({'state':st_to_fips}, inplace=True)
 seasonality.replace({'state':{'New York City':'36061'}}, inplace=True)
 
-FIPS_demo = set(demo['fips']); FIPS_mt = set(motality['fips']); FIPS_mb = set(mobility['fips'])
+policy = pd.read_csv(PATH_POL, parse_dates=['date'])
+policy['state'] = policy['state'].apply(lambda x:'0'*(2-len(str(x)))+str(x))
+policy['fips'] = policy['fips'].apply(correct_FIPS)
+policy.replace({'fips':FIPS_mapping}, inplace=True)
+
+FIPS_demo = set(demo['fips']); FIPS_gdp = set(gdp['fips']); FIPS_mt = set(motality['fips']); FIPS_mb = set(mobility['fips'])
 
 date_st_mt = motality['date'].min(); date_ed_mt = motality['date'].max()
 date_st_mb = mobility['date'].min(); date_ed_mb = mobility['date'].max()
@@ -151,9 +162,11 @@ date_ed = min(date_ed_mt, date_ed_mb)
 date_win = pd.date_range(start=date_st, end=date_ed)
 
 columns_demo = list(demo.columns); columns_demo.remove('fips')
+columns_gdp = list(gdp.columns); columns_gdp.remove('fips')
 columns_mt = ['cases', 'deaths']
 columns_mb = ['m50', 'm50_index']
 columns_ss = ['seasonality']
+columns_pol = ['emergency', 'safeathome', 'business']
 
 with open(f'{homedir}/JK/preprocessing/{md_now}/columns.txt', 'w') as f:
     print(columns_demo+columns_mt+columns_mb+columns_ss, file=f)
@@ -185,9 +198,23 @@ if PREPROCESSING:
             data4 = seasonality[(seasonality['state']==fips[:2]) & (seasonality['date'].isin(date_win))][['date']+columns_ss]
         data4 = data4.sort_values(by=['date'])[columns_ss].to_numpy()
 
-        data_ctg.append(data1)
-        data_ts.append(np.hstack((data2, data3, data4)))
-    np.save(f'{homedir}/JK/preprocessing/{md_now}/data_ctg.npy', np.asarray(data_ctg, dtype=np.float64))
-    np.save(f'{homedir}/JK/preprocessing/{md_now}/data_ts.npy', np.asarray(data_ts, dtype=np.float64))
+        data5 = gdp[gdp['fips']==fips][columns_gdp].to_numpy()[0]
+
+        data6 = []
+        _ = policy[policy['state']==fips[:2]].copy()
+        _ = _[(_['fips']=='0')|(_['fips']==fips)][['date']+columns_pol]
+        _.drop_duplicates(subset='date', keep='last', inplace=True)
+        _.reset_index(drop=True, inplace=True)
+        for dt in date_win:
+            if len(_[_['date']<=dt])==0:
+                data6.append([0,0,0])
+            else:
+                data6.append(list(_[_['date']<=dt].iloc[-1][columns_pol].apply(int)))
+        data6 = np.asarray(data6)
+
+        data_ctg.append(np.hstack((data1, data5)))
+        data_ts.append(np.hstack((data2, data3, data4, data6)))
+    np.save(f'{homedir}/JK/preprocessing/{md_now}/data_ctg.npy', np.asarray(data_ctg, dtype=np.float32))
+    np.save(f'{homedir}/JK/preprocessing/{md_now}/data_ts.npy', np.asarray(data_ts, dtype=np.float32))
     with open(f'{homedir}/JK/preprocessing/{md_now}/FIPS.txt', 'w') as f:
         print(sorted(FIPS_demo), file=f)

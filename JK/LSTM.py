@@ -238,7 +238,7 @@ def normalizer(scaler, X, y=None, target_idx=None):
     
         return X, y
 
-def load_Dataset(X_train, C_train, y_train, X_val, C_val, y_val, BATCH_SIZE=32, BUFFER_SIZE=10000):
+def load_Dataset(X_train, C_train, y_train, X_val, C_val, y_val, BATCH_SIZE=64, BUFFER_SIZE=10000):
     """
     Popular BATCH_SIZE: 32, 64, 128
     Oftentimes smaller BATCH_SIZE perform better
@@ -280,9 +280,9 @@ def LSTM_fit(train_data, val_data, lr=0.001, NUM_CELLS=128, EPOCHS=10, dp=0.2, m
     for i in range(len(quantileList)):
         model_qntl[i].compile(optimizer=optimizer, loss=lambda y_p, y: quantileLoss(quantileList[i], y_p, y))
         print(f'Quantile={10*(i+1)} is trained')
-        earlystop = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=5)
-        history = model_qntl[i].fit(train_data, epochs=EPOCHS, steps_per_epoch=200, validation_data=val_data,
-                                    validation_steps=50, callbacks=[earlystop], shuffle=True, **kwargs)
+        earlystop = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=5, baseline=0.1)
+        history = model_qntl[i].fit(train_data, epochs=EPOCHS, steps_per_epoch=1000, validation_data=val_data,
+                                    validation_steps=100, callbacks=[earlystop], shuffle=True, **kwargs)
         history_qntl.append(history)
 
     if monitor:
@@ -305,19 +305,20 @@ def LSTM_finder(train_data, val_data, lr=0.001, NUM_CELLS=128, EPOCHS=10, dp=0.2
 
     return lr_finder
 
-def predict_future(model_qntl, dataList, scaler, target_idx, FIPS=None, date_ed=None):
-    mu, sigma = scaler.mean_[target_idx], scaler.scale_[target_idx]
-    history_size = model_qntl[0].input.shape[1]
-    target_size = model_qntl[0].output.shape[1]
+def predict_future(model_qntl, data_ts, data_ctg, scaler_ts, scaler_ctg, history_size, target_idx, FIPS=None, date_ed=None):
+    mu, sigma = scaler_ts.mean_[target_idx], scaler_ts.scale_[target_idx]
 
-    X_future = [data[-history_size:, :] for data in dataList]
-    X_future = np.asarray(X_future)
-    X_future = np.asarray(np.vsplit(scaler.transform(np.vstack(X_future)), len(X_future)))
+    X_future = [data[-history_size:, :] for data in data_ts]; X_future = np.asarray(X_future)
+    C_future = data_ctg; C_future = np.asarray(C_future)
+
+    X_future = np.asarray(np.vsplit(scaler_ts.transform(np.vstack(X_future)), len(X_future)))
+    C_future = scaler_ctg.transform(C_future)
 
     prediction_future = []
     for i in range(len(model_qntl)):
-        prediction_future.append(sigma*model_qntl[i].predict(X_future)+mu)
+        prediction_future.append(sigma*model_qntl[i].predict((X_future, C_future))+mu)
     prediction_future = np.asarray(prediction_future)
+    target_size = prediction_future.shape[2]
 
     if (FIPS is None) or (date_ed is None):
         return np.asarray(prediction_future)
