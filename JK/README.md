@@ -5,6 +5,7 @@ Module containing auxillary functions to be used in other modules. This module i
 ## DataCleaner.py
 
 Designed to run on daily basis. It reads up the datasets to be trained, and generate the preprocessed data to be used in LSTM under the folder preprocessing/{TODAY}. During the run, it prints the starting and end date to be included in the training, which should be fed back to LSTM training.
+
 Fully capitalized variables at the beginning of the codes (that is, the paths to the datasets) are the only parts that can vary.
 
 ## LSTM.py
