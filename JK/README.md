@@ -11,14 +11,22 @@ Fully capitalized variables at the beginning of the codes (that is, the paths to
 ## LSTM.py
 
 Module containing all the definition of necessary functions and classes for LSTM.
+
 Currently available: All except possibly plot_prediction function.
 Naming conventions should be clear, but just in case, a few elaborations follow:
+
 class LRFinder: used in LSTM_finder function. See the comment in the code for details.
+
 class conditionalRNN: a keras Layer. Used in all LSTM model build-up steps. See the comment in the code for details.
+
 class SingleLayerConditionalRNN: a keras model consisting of single conditional RNN followed by the output dense layer.
+
 function load_Dataset: it generates a tensorflow Dataset class from preprocessed datasets (which is in the form of numpy array).
+
 function LSTM_fit: it trains the conditional RNN quantile-wise, the output is of the form of a list of tensorflow Models (of length 9).
+
 function LSTM_finder: it runs a quick training of conditional RNN by varying the learning rate and plots the validation error. The learning rate hitting the minimum is supposed to be the optimal learning rate.
+
 function predict_future: predict the future using the trained model (from LSTM_fit, say). Output is a pandas dataframe, which can be transformed to the submission format using to_multi_idx function in utility.py
 
 ## LSTM_trainer.py
