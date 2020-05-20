@@ -280,8 +280,8 @@ def LSTM_fit(train_data, val_data, lr=0.001, NUM_CELLS=128, EPOCHS=10, dp=0.2, m
     for i in range(len(quantileList)):
         model_qntl[i].compile(optimizer=optimizer, loss=lambda y_p, y: quantileLoss(quantileList[i], y_p, y))
         print(f'Quantile={10*(i+1)} is trained')
-        earlystop = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=5, baseline=0.1)
-        history = model_qntl[i].fit(train_data, epochs=EPOCHS, steps_per_epoch=1000, validation_data=val_data,
+        earlystop = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=7, baseline=0.1)
+        history = model_qntl[i].fit(train_data, epochs=EPOCHS, steps_per_epoch=3000, validation_data=val_data,
                                     validation_steps=100, callbacks=[earlystop], shuffle=True, **kwargs)
         history_qntl.append(history)
 

@@ -168,8 +168,10 @@ columns_mb = ['m50', 'm50_index']
 columns_ss = ['seasonality']
 columns_pol = ['emergency', 'safeathome', 'business']
 
-with open(f'{homedir}/JK/preprocessing/{md_now}/columns.txt', 'w') as f:
-    print(columns_demo+columns_mt+columns_mb+columns_ss, file=f)
+with open(f'{homedir}/JK/preprocessing/{md_now}/columns_ctg.txt', 'w') as f:
+    print(columns_demo+columns_gdp, file=f)
+with open(f'{homedir}/JK/preprocessing/{md_now}/columns_ts.txt', 'w') as f:
+    print(columns_mt+columns_mb+columns_ss+columns_pol, file=f)
 
 print('# Demographic FIPS=', len(FIPS_demo), ', # Motality FIPS=', len(FIPS_mt), ', # Mobility FIPS=', len(FIPS_mb))
 print('First date to be trained:', date_st, ', Final date to be trained:', date_ed)
@@ -181,7 +183,11 @@ in the order of demo-motal-mobi
 if PREPROCESSING:
     data_ts = []
     data_ctg = []
+    counter = 0
     for fips in sorted(FIPS_demo):
+        counter += 1
+        if counter % 300 == 0:
+            print('.', end='')
         data1 = demo[demo['fips']==fips][columns_demo].to_numpy()[0]
         
         data2 = motality[(motality['fips']==fips) & (motality['date'].isin(date_win))][['date']+columns_mt]
@@ -218,3 +224,4 @@ if PREPROCESSING:
     np.save(f'{homedir}/JK/preprocessing/{md_now}/data_ts.npy', np.asarray(data_ts, dtype=np.float32))
     with open(f'{homedir}/JK/preprocessing/{md_now}/FIPS.txt', 'w') as f:
         print(sorted(FIPS_demo), file=f)
+    print('Preprocessing finished.')

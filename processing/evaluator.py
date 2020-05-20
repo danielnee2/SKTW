@@ -54,19 +54,6 @@ sample_submission = sample_submission[(sample_submission['date'] <= end_date)  &
 # New_active_fips are FIPS that were introduced into the dataset during the scoring period. 
 # Active FIPS should be scored against deaths data from NYT if such data is available, 
 # but Inactive FIPS should be scored with a target of 0.
-<<<<<<< HEAD
-
-# with open(f'{homedir}/JK/preprocessing/0511/FIPS_cluster_cls=0.txt', 'r') as f:
-#     FIPS_cluster = eval(f.read())
-# FIPS_cluster_set = set()
-# for fips in FIPS_cluster:
-#     FIPS_cluster_set.add(int(fips))
-
-disabled_fips = set({})
-prev_active_fips = set(preperiod_df.fips.unique())#.difference(fips_over0)
-curr_active_fips = set(daily_df.fips.unique())#.difference(fips_over0)
-all_fips = set(sample_submission.fips.unique())#.difference(fips_over0)
-=======
 disabled_fips = set({
     ## NEW YORK
     36005, 36047, 36081, 36085, 
@@ -86,7 +73,6 @@ disabled_fips = set({
 prev_active_fips = set(preperiod_df.fips.unique())
 curr_active_fips = set(daily_df.fips.unique())
 all_fips = set(sample_submission.fips.unique())
->>>>>>> 732195d53ee6bccd34996eb6459939286c426bfe
 covid_active_fips = prev_active_fips.intersection(all_fips).intersection(curr_active_fips) - disabled_fips
 inactive_fips = all_fips - prev_active_fips - curr_active_fips - disabled_fips
 new_active_fips = (curr_active_fips - prev_active_fips).intersection(all_fips) - disabled_fips
