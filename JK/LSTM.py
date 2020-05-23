@@ -98,7 +98,7 @@ class ConditionalRNN(tf.keras.layers.Layer):
                 cell = tf.keras.layers.SimpleRNNCell
             else:
                 raise Exception('Only GRU, LSTM and RNN are supported as cells.')
-        self._cell = cell if hasattr(cell, 'units') else cell(units=units)
+        self._cell = cell if hasattr(cell, 'units') else cell(units=units, **kwargs)
         self.rnn = tf.keras.layers.RNN(cell=self._cell, *args, **kwargs)
 
         # single cond
@@ -165,7 +165,7 @@ class SingleLayerConditionalRNN(tf.keras.Model):
     def __init__(self, NUM_CELLS, target_size, **kwargs):
         super().__init__()
         self.layer1 = ConditionalRNN(NUM_CELLS, cell='LSTM', **kwargs)
-        self.out = tf.keras.layers.Dense(target_size, **kwargs)
+        self.out = tf.keras.layers.Dense(target_size)
 
     def call(self, inputs, **kwargs):
         o = self.layer1(inputs)
@@ -273,7 +273,7 @@ def quantileLoss(quantile, y_p, y):
 def LSTM_fit(train_data, val_data, lr=0.001, NUM_CELLS=128, EPOCHS=10, dp=0.2, monitor=False, **kwargs):
     target_size = train_data.element_spec[1].shape[1]
     
-    model_qntl = [SingleLayerConditionalRNN(NUM_CELLS, target_size) for _ in range(len(quantileList))]
+    model_qntl = [SingleLayerConditionalRNN(NUM_CELLS, target_size, dropout=dp) for _ in range(len(quantileList))]
     history_qntl =[]
     optimizer = tf.keras.optimizers.Adam(learning_rate=lr)
 
@@ -293,7 +293,7 @@ def LSTM_fit(train_data, val_data, lr=0.001, NUM_CELLS=128, EPOCHS=10, dp=0.2, m
 def LSTM_finder(train_data, val_data, lr=0.001, NUM_CELLS=128, EPOCHS=10, dp=0.2, **kwargs):
     target_size = train_data.element_spec[1].shape[1]
     
-    model_qntl = [SingleLayerConditionalRNN(NUM_CELLS, target_size) for _ in range(len(quantileList))]
+    model_qntl = [SingleLayerConditionalRNN(NUM_CELLS, target_size, dropout=dp) for _ in range(len(quantileList))]
     history_qntl =[]
     optimizer = tf.keras.optimizers.Adam(learning_rate=lr)
     lr_finder = [LRFinder() for _ in range(len(quantileList))]

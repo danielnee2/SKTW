@@ -114,3 +114,19 @@ def to_multi_idx(df, fipslabel='fips', datelabel='date'):
         reindexer[df.index[i]] = reduce((lambda x, y: str(x)[:10]+f'-{int(y)}'), df.iloc[i][[datelabel, fipslabel]].tolist())
 
     return df.rename(index=reindexer).rename_axis('id').drop([datelabel, fipslabel], axis=1)
+
+def prediction_to_submission(df, base='/sample_submission.csv', fipslabel='fips', datelabel='date', force_positive=True):
+    import pandas as pd
+
+    homedir = get_homedir()
+
+    df[fipslabel] = df[fipslabel].apply(correct_FIPS)
+    df = fix_FIPS(df, fipslabel='fips', datelabel='date')
+    df = to_multi_idx(df, fipslabel='fips', datelabel='date')
+    if force_positive:
+        df[df<0]=0.0
+    df_base = pd.read_csv(f'{homedir}'+base)
+    df_base.set_index('id', inplace=True)
+    df_base.update(df)
+    
+    return df_base.reset_index()
