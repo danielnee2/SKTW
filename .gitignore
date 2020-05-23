@@ -1412,3 +1412,77 @@ optimization_epoch.csv
 exploratory_HJo/evaluator_HJo.py
 
 exploratory_HJo/cond_rnn_script_v3_branchoff.ipynb
+
+2ndSubmission_condRNN_allDemoData_noCluster_17days_again.csv
+
+exploratory_HJo/checkpoint
+
+exploratory_HJo/featureImportanceAnalysis_static.csv
+
+exploratory_HJo/featureImportanceAnalysis_static.pkl
+
+exploratory_HJo/featureImportanceAnalysis_time.pkl
+
+exploratory_HJo/featureTest_valLoss_static.png
+
+exploratory_HJo/featureTest_valLoss_time.png
+
+exploratory_HJo/models_0.5quantile, 10models, 15maxEpoch_0.data-00000-of-00001
+
+exploratory_HJo/models_0.5quantile, 10models, 15maxEpoch_0.index
+
+exploratory_HJo/models_0.5quantile, 10models, 15maxEpoch_1.data-00000-of-00001
+
+exploratory_HJo/models_0.5quantile, 10models, 15maxEpoch_1.index
+
+exploratory_HJo/models_0.5quantile, 10models, 15maxEpoch_2.data-00000-of-00001
+
+exploratory_HJo/models_0.5quantile, 10models, 15maxEpoch_2.index
+
+exploratory_HJo/models_0.5quantile, 10models, 15maxEpoch_3.data-00000-of-00001
+
+exploratory_HJo/models_0.5quantile, 10models, 15maxEpoch_3.index
+
+exploratory_HJo/models_0.5quantile, 10models, 15maxEpoch_4.data-00000-of-00001
+
+exploratory_HJo/models_0.5quantile, 10models, 15maxEpoch_4.index
+
+exploratory_HJo/models_0.5quantile, 10models, 15maxEpoch_5.data-00000-of-00001
+
+exploratory_HJo/models_0.5quantile, 10models, 15maxEpoch_5.index
+
+exploratory_HJo/models_0.5quantile, 10models, 15maxEpoch_6.data-00000-of-00001
+
+exploratory_HJo/models_0.5quantile, 10models, 15maxEpoch_6.index
+
+exploratory_HJo/models_0.5quantile, 10models, 15maxEpoch_7.data-00000-of-00001
+
+exploratory_HJo/models_0.5quantile, 10models, 15maxEpoch_7.index
+
+exploratory_HJo/models_0.5quantile, 10models, 15maxEpoch_8.data-00000-of-00001
+
+exploratory_HJo/models_0.5quantile, 10models, 15maxEpoch_8.index
+
+exploratory_HJo/models_0.5quantile, 10models, 15maxEpoch_9.data-00000-of-00001
+
+exploratory_HJo/models_0.5quantile, 10models, 15maxEpoch_9.index
+
+exploratory_HJo/models_50%quantile, 10models, 15maxEpoch.pkl
+
+exploratory_HJo/models_50%quantile, 10models, 15maxEpoch.sav
+
+JK/DataCleaner.py
+
+JK/FIPS_mapping.txt
+
+JK/GDP.csv
+
+JK/LSTM_trainer.py
+
+JK/LSTM.py
+
+JK/po_code_state_map.json
+
+JK/policy.csv
+
+JK/utility.py
