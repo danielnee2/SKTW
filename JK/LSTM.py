@@ -75,7 +75,7 @@ class LRFinder(tf.keras.callbacks.Callback):
 class ConditionalRNN(tf.keras.layers.Layer):
     
     # Arguments to the RNN like return_sequences, return_state...
-    def __init__(self, units, cell=tf.keras.layers.LSTMCell, *args,
+    def __init__(self, units, cell=tf.keras.layers.LSTMCell, dropout=0.0, *args,
                  **kwargs):
         """
         Conditional RNN. Conditions time series on categorical data.
@@ -98,8 +98,9 @@ class ConditionalRNN(tf.keras.layers.Layer):
                 cell = tf.keras.layers.SimpleRNNCell
             else:
                 raise Exception('Only GRU, LSTM and RNN are supported as cells.')
-        self._cell = cell if hasattr(cell, 'units') else cell(units=units, **kwargs)
+        self._cell = cell if hasattr(cell, 'units') else cell(units=units)
         self.rnn = tf.keras.layers.RNN(cell=self._cell, *args, **kwargs)
+        self.dropout = tf.keras.layers.Dropout(dropout)
 
         # single cond
         self.cond_to_init_state_dense_1 = tf.keras.layers.Dense(units=self.units, *args, **kwargs)
@@ -153,6 +154,8 @@ class ConditionalRNN(tf.keras.layers.Layer):
             if cond is not None:
                 self.init_state = self.cond_to_init_state_dense_1(cond)
                 self.init_state = tf.unstack(self.init_state, axis=0)
+        for i in range(2):
+            self.init_state[i] = self.dropout(self.init_state[i])
         out = self.rnn(x, initial_state=self.init_state, *args, **kwargs)
         if self.rnn.return_state:
             outputs, h, c = out
@@ -162,13 +165,18 @@ class ConditionalRNN(tf.keras.layers.Layer):
             return out
 
 class SingleLayerConditionalRNN(tf.keras.Model):
-    def __init__(self, NUM_CELLS, target_size, **kwargs):
+    def __init__(self, NUM_CELLS, target_size, dropout, quantiles, **kwargs):
         super().__init__()
-        self.layer1 = ConditionalRNN(NUM_CELLS, cell='LSTM', **kwargs)
-        self.out = tf.keras.layers.Dense(target_size)
+        self.quantiles = quantiles
+        self.layer1 = ConditionalRNN(NUM_CELLS, cell='LSTM', dropout=dropout, **kwargs)
+        # self.layer2 = tf.keras.layers.Dropout(dropout)
+        self.outs = [tf.keras.layers.Dense(target_size) for q in quantiles]
+        self.out = tf.keras.layers.Concatenate()
 
     def call(self, inputs, **kwargs):
         o = self.layer1(inputs)
+        # o = self.layer2(o)
+        o = [self.outs[_](o) for _ in range(len(self.quantiles))]
         o = self.out(o)
         return o
 
@@ -247,12 +255,12 @@ def load_Dataset(X_train, C_train, y_train, X_val, C_val, y_val, BATCH_SIZE=64, 
     C_tr_data = tf.data.Dataset.from_tensor_slices(C_train)
     y_tr_data = tf.data.Dataset.from_tensor_slices(y_train)
     train_data = tf.data.Dataset.zip(((X_tr_data, C_tr_data), y_tr_data))
-    train_data = train_data.cache().shuffle(BUFFER_SIZE).batch(BATCH_SIZE).repeat()
+    train_data = train_data.shuffle(BUFFER_SIZE).batch(BATCH_SIZE).cache().repeat()
     X_v_data = tf.data.Dataset.from_tensor_slices(X_val)
     C_v_data = tf.data.Dataset.from_tensor_slices(C_val)
     y_v_data = tf.data.Dataset.from_tensor_slices(y_val)
     val_data = tf.data.Dataset.zip(((X_v_data, C_v_data), y_v_data))
-    val_data = val_data.batch(BATCH_SIZE).repeat()
+    val_data = val_data.shuffle(BUFFER_SIZE).batch(BATCH_SIZE).repeat()
     
     return train_data, val_data
 
@@ -270,7 +278,14 @@ def quantileLoss(quantile, y_p, y):
     e = y_p - y
     return tf.math.reduce_mean(tf.math.maximum(quantile*e, (quantile-1)*e))
 
-def LSTM_fit(train_data, val_data, lr=0.001, NUM_CELLS=128, EPOCHS=10, dp=0.2, monitor=False, **kwargs):
+def MultiQuantileLoss(quantiles, target_size, y_p, y):
+    # assert y_p.shape[-1] == y.shape[-1]*len(quantiles), f"{y_p.shape}, {y.shape}"
+    # a = tf.reshape(y_p, [len(quantiles)]+y.shape)
+
+    a = [y[:,_*target_size:(_+1)*target_size] for _ in range(len(quantiles))]
+    return tf.math.reduce_mean([quantileLoss(quantiles[_], y_p, a[_]) for _ in range(len(a))])
+
+def LSTM_fit(train_data, val_data, lr=0.001, NUM_CELLS=128, EPOCHS=10, dp=0.2, monitor=False, earlystop=True, **kwargs):
     target_size = train_data.element_spec[1].shape[1]
     
     model_qntl = [SingleLayerConditionalRNN(NUM_CELLS, target_size, dropout=dp) for _ in range(len(quantileList))]
@@ -280,9 +295,12 @@ def LSTM_fit(train_data, val_data, lr=0.001, NUM_CELLS=128, EPOCHS=10, dp=0.2, m
     for i in range(len(quantileList)):
         model_qntl[i].compile(optimizer=optimizer, loss=lambda y_p, y: quantileLoss(quantileList[i], y_p, y))
         print(f'Quantile={10*(i+1)} is trained')
-        earlystop = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=7, baseline=0.1)
-        history = model_qntl[i].fit(train_data, epochs=EPOCHS, steps_per_epoch=3000, validation_data=val_data,
-                                    validation_steps=100, callbacks=[earlystop], shuffle=True, **kwargs)
+        if earlystop:
+            earlystop = [tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=7, baseline=0.1)]
+        else:
+            earlystop = None
+        history = model_qntl[i].fit(train_data, epochs=EPOCHS, steps_per_epoch=2500, validation_data=val_data,
+                                    validation_steps=200, callbacks=earlystop, **kwargs)
         history_qntl.append(history)
 
     if monitor:
@@ -290,7 +308,27 @@ def LSTM_fit(train_data, val_data, lr=0.001, NUM_CELLS=128, EPOCHS=10, dp=0.2, m
     else:
         return model_qntl
 
-def LSTM_finder(train_data, val_data, lr=0.001, NUM_CELLS=128, EPOCHS=10, dp=0.2, **kwargs):
+def LSTM_fit_mult(train_data, val_data, lr=0.001, NUM_CELLS=128, EPOCHS=10, dp=0.2, monitor=False, earlystop=True, **kwargs):
+    target_size = train_data.element_spec[1].shape[1]
+    
+    model = SingleLayerConditionalRNN(NUM_CELLS, target_size, dropout=dp, quantiles=quantileList)
+    optimizer = tf.keras.optimizers.Adam(learning_rate=lr)
+
+    model.compile(optimizer=optimizer, loss=lambda y_p, y: MultiQuantileLoss(quantileList, target_size, y_p, y))
+    print('Training multi-quantile model.')
+    if earlystop:
+        earlystop = [tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=7, baseline=0.1)]
+    else:
+        earlystop = None
+    history = model.fit(train_data, epochs=EPOCHS, steps_per_epoch=2500, validation_data=val_data,
+                                validation_steps=200, callbacks=earlystop, **kwargs)
+
+    if monitor:
+        return model, history
+    else:
+        return model
+
+def LSTM_finder(train_data, val_data, lr=0.001, NUM_CELLS=128, EPOCHS=10, dp=0.2):
     target_size = train_data.element_spec[1].shape[1]
     
     model_qntl = [SingleLayerConditionalRNN(NUM_CELLS, target_size, dropout=dp) for _ in range(len(quantileList))]
@@ -301,7 +339,7 @@ def LSTM_finder(train_data, val_data, lr=0.001, NUM_CELLS=128, EPOCHS=10, dp=0.2
     for i in range(len(quantileList)):
         model_qntl[i].compile(optimizer=optimizer, loss=lambda y_p, y: quantileLoss(quantileList[i], y_p, y))
         print(f'Quantile={10*(i+1)} is trained')
-        history = model_qntl[i].fit(train_data, epochs=EPOCHS, steps_per_epoch=200, validation_data=val_data, validation_steps=50, callbacks=[lr_finder[i]])
+        history = model_qntl[i].fit(train_data, epochs=EPOCHS, validation_data=val_data, validation_steps=300, callbacks=[lr_finder[i]])
 
     return lr_finder
 
@@ -319,6 +357,31 @@ def predict_future(model_qntl, data_ts, data_ctg, scaler_ts, scaler_ctg, history
         prediction_future.append(sigma*model_qntl[i].predict((X_future, C_future))+mu)
     prediction_future = np.asarray(prediction_future)
     target_size = prediction_future.shape[2]
+
+    if (FIPS is None) or (date_ed is None):
+        return np.asarray(prediction_future)
+    else:
+        print('Saving future prediction.')
+        df_future = []
+        for i, fips in enumerate(FIPS):
+            for j in range(target_size):
+                df_future.append([date_ed+pd.Timedelta(days=1+j), fips]+prediction_future[:,i,j].tolist())
+
+        return pd.DataFrame(df_future, columns=['date', 'fips']+list(range(10, 100, 10)))
+
+def predict_future_mult(model, data_ts, data_ctg, scaler_ts, scaler_ctg, history_size, target_idx, FIPS=None, date_ed=None):
+    mu, sigma = scaler_ts.mean_[target_idx], scaler_ts.scale_[target_idx]
+
+    X_future = [data[-history_size:, :] for data in data_ts]; X_future = np.asarray(X_future)
+    C_future = data_ctg; C_future = np.asarray(C_future)
+
+    X_future = np.asarray(np.vsplit(scaler_ts.transform(np.vstack(X_future)), len(X_future)))
+    C_future = scaler_ctg.transform(C_future)
+
+    prediction_future = np.asarray(sigma*model.predict((X_future, C_future))+mu)
+    assert (prediction_future.shape[1] % len(quantileList))==0
+    target_size = prediction_future.shape[1] // len(quantileList)
+    prediction_future = np.asarray([prediction_future[:, _*target_size:(_+1)*target_size] for _ in range(len(quantileList))])
 
     if (FIPS is None) or (date_ed is None):
         return np.asarray(prediction_future)

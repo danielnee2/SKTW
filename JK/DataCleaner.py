@@ -9,6 +9,7 @@ homedir = get_homedir()
 
 PATH_DEMO = f"{homedir}/data/us/aggregate_berkeley.csv"
 PATH_GDP = f"{homedir}/JK/GDP.csv"
+PATH_GEO = f"{homedir}/data/us/demographics/county_land_areas.csv"
 PATH_MT = f"{homedir}/data/us/covid/nyt_us_counties.csv"
 PATH_MB = f"{homedir}/data/us/mobility/DL-us-mobility-daterow.csv"
 PATH_SS = f"{homedir}/exploratory_HJo/seasonality_stateLevel.csv"
@@ -78,12 +79,18 @@ demo['HeartDiseaseMortality'] = berkeley['HeartDiseaseMortality']
 demo['StrokeMortality'] = berkeley['StrokeMortality']
 demo['DiabetesPercentage'] = berkeley['DiabetesPercentage']
 demo['Smokers_Percentage'] = berkeley['Smokers_Percentage']
+demo['#EligibleforMedicare2018'] = berkeley['#EligibleforMedicare2018']
+demo['mortality2015-17Estimated'] = berkeley['mortality2015-17Estimated']
 
 demo.fillna(0, inplace=True)
 
 gdp = pd.read_csv(PATH_GDP)
 gdp['fips'] = gdp['fips'].apply(correct_FIPS)
 gdp = fix_FIPS(gdp, fipslabel='fips', reduced=True)
+
+geo = pd.read_csv(PATH_GEO, usecols=[0,2,3,4,5])
+geo['County FIPS'] = geo['County FIPS'].apply(correct_FIPS)
+geo = fix_FIPS(geo, fipslabel='County FIPS', reduced=True)
 
 motality = pd.read_csv(PATH_MT, parse_dates=['date'])
 motality.dropna(inplace=True)
@@ -163,13 +170,14 @@ date_win = pd.date_range(start=date_st, end=date_ed)
 
 columns_demo = list(demo.columns); columns_demo.remove('fips')
 columns_gdp = list(gdp.columns); columns_gdp.remove('fips')
+columns_geo = list(geo.columns); columns_geo.remove('County FIPS')
 columns_mt = ['cases', 'deaths']
 columns_mb = ['m50', 'm50_index']
 columns_ss = ['seasonality']
 columns_pol = ['emergency', 'safeathome', 'business']
 
 with open(f'{homedir}/JK/preprocessing/{md_now}/columns_ctg.txt', 'w') as f:
-    print(columns_demo+columns_gdp, file=f)
+    print(columns_demo+columns_gdp+columns_geo, file=f)
 with open(f'{homedir}/JK/preprocessing/{md_now}/columns_ts.txt', 'w') as f:
     print(columns_mt+columns_mb+columns_ss+columns_pol, file=f)
 
@@ -218,7 +226,9 @@ if PREPROCESSING:
                 data6.append(list(_[_['date']<=dt].iloc[-1][columns_pol].apply(int)))
         data6 = np.asarray(data6)
 
-        data_ctg.append(np.hstack((data1, data5)))
+        data7 = geo[geo['County FIPS']==fips][columns_geo].to_numpy()[0]
+
+        data_ctg.append(np.hstack((data1, data5, data7)))
         data_ts.append(np.hstack((data2, data3, data4, data6)))
     np.save(f'{homedir}/JK/preprocessing/{md_now}/data_ctg.npy', np.asarray(data_ctg, dtype=np.float32))
     np.save(f'{homedir}/JK/preprocessing/{md_now}/data_ts.npy', np.asarray(data_ts, dtype=np.float32))

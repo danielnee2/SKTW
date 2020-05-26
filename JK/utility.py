@@ -115,8 +115,9 @@ def to_multi_idx(df, fipslabel='fips', datelabel='date'):
 
     return df.rename(index=reindexer).rename_axis('id').drop([datelabel, fipslabel], axis=1)
 
-def prediction_to_submission(df, base='/sample_submission.csv', fipslabel='fips', datelabel='date', force_positive=True):
+def prediction_to_submission(df, base='/sample_submission.csv', fipslabel='fips', datelabel='date', force_positive=True, force_increasing=True):
     import pandas as pd
+    import numpy as np
 
     homedir = get_homedir()
 
@@ -125,6 +126,11 @@ def prediction_to_submission(df, base='/sample_submission.csv', fipslabel='fips'
     df = to_multi_idx(df, fipslabel='fips', datelabel='date')
     if force_positive:
         df[df<0]=0.0
+    if force_increasing:
+        arr = df.to_numpy()
+        arr = np.take_along_axis(arr, np.argsort(arr, axis=1), axis=1)
+        df = pd.DataFrame(arr, index=df.index, columns=df.columns)
+
     df_base = pd.read_csv(f'{homedir}'+base)
     df_base.set_index('id', inplace=True)
     df_base.update(df)

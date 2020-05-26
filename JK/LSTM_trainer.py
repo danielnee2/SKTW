@@ -9,21 +9,21 @@ from LSTM import *
 
 homedir = get_homedir()
 
-TODAY = '0519' # date of today, in the form of string. It signifies which folder in JK/preprocessing to be trained.
-date_ed = pd.Timestamp('2020-05-16') # end date to be included in the training. in the form of pandas Timestamp. 
+TODAY = '0523' # date of today, in the form of string. It signifies which folder in JK/preprocessing to be trained.
+date_ed = pd.Timestamp('2020-05-19') # end date to be included in the training. in the form of pandas Timestamp. 
                                      # should be the same as an output of DataCleaner.py.
 
 PATH_PREP = f"{homedir}/JK/preprocessing/{TODAY}"
 PATH = f"{homedir}/JK/prediction/{TODAY}"
 split_ratio = 0.1
 QUANTILE = list(quantileList)
-history_size = 7
+history_size = 14
 target_size = 14
 step_size = 1
 NUM_CELLS = 128
 lr = 0.001
 dp = 0.2
-EPOCHS = 100
+EPOCHS = 5
 #######################################################################################
 
 with open(PATH_PREP+f'/FIPS.txt', 'r') as f:
@@ -40,7 +40,7 @@ with open(PATH_PREP+f'/columns_ts.txt', 'r') as f:
     columns_ts = eval(f.read())
 print(f'# of features = {len(columns_ctg)+len(columns_ts)}')
 
-target_idx = 1 #columns.index('deaths')
+target_idx = columns_ts.index('deaths')
 
 try:
     os.mkdir(PATH)
@@ -57,15 +57,25 @@ C_train, C_val = normalizer(scaler_ctg, C_train), normalizer(scaler_ctg, C_val)
 
 train_data, val_data = load_Dataset(X_train, C_train, y_train, X_val, C_val, y_val)
 
-lr_finder = LSTM_finder(train_data, val_data, lr=lr, NUM_CELLS=NUM_CELLS, EPOCHS=EPOCHS, dp=dp)
-# model_qntl, history_qntl = LSTM_fit(train_data, val_data, lr=lr, NUM_CELLS=NUM_CELLS, EPOCHS=EPOCHS, dp=dp, monitor=True, verbose=2)
+model, history = LSTM_fit_mult(train_data, val_data, lr=lr, NUM_CELLS=NUM_CELLS, EPOCHS=EPOCHS, dp=dp, monitor=True, verbose=2)
+FILEPATH = f"/LSTM_mult"
+plot_train_history(history, title=f'History size={history_size}, dropout={dp}', path=PATH+FILEPATH+'_history_{_}.png')
 
-for i in range(len(QUANTILE)):
-    FILEPATH = f"/LSTM_qntl={10*(i+1)}"
-    lr_finder[i].plot(PATH+FILEPATH+'.png')
-    # plot_train_history(history_qntl[i], title=f'History size={history_size}, dropout={dp}', path=PATH+FILEPATH+'_history.png')
-    # model_qntl[i].save(PATH+FILEPATH)
-    # np.save(PATH+FILEPATH+'.npy', np.vstack((LOSS, VAL_LOSS)).astype(np.float32))
+df_future = predict_future_mult(model, data_ts, data_ctg, scaler_ts, scaler_ctg, history_size, target_idx, FIPS=FIPS_total, date_ed=date_ed)
+df_future.to_csv(PATH+f'/LSTM_{TODAY}.csv', index=False)
 
-# df_future = predict_future(model_qntl, data_ts, data_ctg, scaler_ts, scaler_ctg, history_size, target_idx, FIPS=FIPS_total, date_ed=date_ed)
+# df_fut = [_ for _ in range(3)]
+# for _ in range(3):
+#     # lr_finder = LSTM_finder(train_data, val_data, lr=lr, NUM_CELLS=NUM_CELLS, EPOCHS=EPOCHS, dp=dp)
+#     model_qntl, history_qntl = LSTM_fit(train_data, val_data, lr=lr, NUM_CELLS=NUM_CELLS, EPOCHS=EPOCHS, dp=dp, monitor=True, verbose=2)
+
+#     for i in range(len(QUANTILE)):
+#         FILEPATH = f"/LSTM_qntl={10*(i+1)}"
+#         # lr_finder[i].plot(PATH+FILEPATH+'.png')
+#         plot_train_history(history_qntl[i], title=f'History size={history_size}, dropout={dp}', path=PATH+FILEPATH+'_history_{_}.png')
+#         # model_qntl[i].save_weights(PATH+"/weights"+FILEPATH)
+#         # np.save(PATH+FILEPATH+'.npy', np.vstack((LOSS, VAL_LOSS)).astype(np.float32))
+
+#     df_fut[_] = predict_future(model_qntl, data_ts, data_ctg, scaler_ts, scaler_ctg, history_size, target_idx, FIPS=FIPS_total, date_ed=date_ed)
+# df_future = (df_fut[0]+df_fut[1]+df_fut[2])/3
 # df_future.to_csv(PATH+f'/LSTM_{TODAY}.csv', index=False)
