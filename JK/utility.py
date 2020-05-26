@@ -115,15 +115,20 @@ def to_multi_idx(df, fipslabel='fips', datelabel='date'):
 
     return df.rename(index=reindexer).rename_axis('id').drop([datelabel, fipslabel], axis=1)
 
-def prediction_to_submission(df, base='/sample_submission.csv', fipslabel='fips', datelabel='date', force_positive=True, force_increasing=True):
+def prediction_to_submission(dfs, base='/sample_submission.csv', fipslabel='fips', datelabel='date', force_positive=True, force_increasing=True):
     import pandas as pd
     import numpy as np
 
     homedir = get_homedir()
 
-    df[fipslabel] = df[fipslabel].apply(correct_FIPS)
-    df = fix_FIPS(df, fipslabel='fips', datelabel='date')
-    df = to_multi_idx(df, fipslabel='fips', datelabel='date')
+    for i in range(len(dfs)):
+        dfs[i][fipslabel] = dfs[i][fipslabel].apply(correct_FIPS)
+        dfs[i] = fix_FIPS(dfs[i], fipslabel='fips', datelabel='date')
+        dfs[i] = to_multi_idx(dfs[i], fipslabel='fips', datelabel='date')
+    df = dfs[0].copy()
+    for i in range(1, len(dfs)):
+        df += dfs[i]
+    df = df / len(dfs)
     if force_positive:
         df[df<0]=0.0
     if force_increasing:

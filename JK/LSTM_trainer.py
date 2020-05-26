@@ -9,30 +9,43 @@ from LSTM import *
 
 homedir = get_homedir()
 
-TODAY = '0523' # date of today, in the form of string. It signifies which folder in JK/preprocessing to be trained.
-date_ed = pd.Timestamp('2020-05-19') # end date to be included in the training. in the form of pandas Timestamp. 
+TODAY = '0525' # date of today, in the form of string. It signifies which folder in JK/preprocessing to be trained.
+date_ed = pd.Timestamp('2020-05-22') # end date to be included in the training. in the form of pandas Timestamp. 
                                      # should be the same as an output of DataCleaner.py.
+# date_ed = pd.Timestamp('2020-05-24')
 
 PATH_PREP = f"{homedir}/JK/preprocessing/{TODAY}"
-PATH = f"{homedir}/JK/prediction/{TODAY}"
-split_ratio = 0.1
+PATH = f"{homedir}/JK/prediction/{TODAY}_full"
+
+# PATH_PREP = f"{homedir}/JK/HC"
+# PATH = f"{homedir}/JK/prediction/{TODAY}_HC"
+
+split_ratio = None
 QUANTILE = list(quantileList)
-history_size = 14
+history_size = 7
 target_size = 14
 step_size = 1
 NUM_CELLS = 128
 lr = 0.001
 dp = 0.2
-EPOCHS = 5
+EPOCHS = 2
 #######################################################################################
 
 with open(PATH_PREP+f'/FIPS.txt', 'r') as f:
     FIPS_total = eval(f.read())
 
+# with open(PATH_PREP+f'/fipsList for dataList.txt', 'r') as f:
+#     FIPS_total = eval(f.read())
+
 data_ctg = np.load(PATH_PREP+f'/data_ctg.npy', allow_pickle=True)
 print(f'Categorical data of shape {data_ctg.shape} is loaded.')
 data_ts = np.load(PATH_PREP+f'/data_ts.npy', allow_pickle=True)
 print(f'Timeseries data of shape {data_ts.shape} is loaded.')
+
+# data_ctg = np.load(PATH_PREP+f'/dataList_static.npy', allow_pickle=True)
+# print(f'Categorical data of shape {data_ctg.shape} is loaded.')
+# data_ts = np.load(PATH_PREP+f'/dataList_time.npy', allow_pickle=True)
+# print(f'Timeseries data of shape {data_ts.shape} is loaded.')
 
 with open(PATH_PREP+f'/columns_ctg.txt', 'r') as f:
     columns_ctg = eval(f.read())
@@ -41,28 +54,40 @@ with open(PATH_PREP+f'/columns_ts.txt', 'r') as f:
 print(f'# of features = {len(columns_ctg)+len(columns_ts)}')
 
 target_idx = columns_ts.index('deaths')
+print('target_idx:',target_idx)
 
 try:
     os.mkdir(PATH)
 except OSError as error:
     print(error)
 
-X_train, y_train, X_val, y_val, C_train, C_val = train_val_split(data_ts, data_ctg, target_idx, history_size, target_size, split_ratio=split_ratio, step_size=step_size)
+# X_train, y_train, X_val, y_val, C_train, C_val = train_val_split(data_ts, data_ctg, target_idx, history_size, target_size, split_ratio=split_ratio, step_size=step_size)
+X_train, y_train, C_train = train_full(data_ts, data_ctg, target_idx, history_size, target_size, step_size=step_size)
 
 scaler_ts, scaler_ctg = get_StandardScaler(X_train, C_train)
 
 X_train, y_train = normalizer(scaler_ts, X_train, y_train, target_idx)
-X_val, y_val = normalizer(scaler_ts, X_val, y_val, target_idx)
-C_train, C_val = normalizer(scaler_ctg, C_train), normalizer(scaler_ctg, C_val)
+# X_val, y_val = normalizer(scaler_ts, X_val, y_val, target_idx)
+C_train = normalizer(scaler_ctg, C_train)
+# C_train, C_val = normalizer(scaler_ctg, C_train), normalizer(scaler_ctg, C_val)
 
-train_data, val_data = load_Dataset(X_train, C_train, y_train, X_val, C_val, y_val)
+# train_data, val_data = load_Dataset(X_train, C_train, y_train, X_val, C_val, y_val)
+train_data = load_Dataset(X_train, C_train, y_train)
 
-model, history = LSTM_fit_mult(train_data, val_data, lr=lr, NUM_CELLS=NUM_CELLS, EPOCHS=EPOCHS, dp=dp, monitor=True, verbose=2)
-FILEPATH = f"/LSTM_mult"
-plot_train_history(history, title=f'History size={history_size}, dropout={dp}', path=PATH+FILEPATH+'_history_{_}.png')
+model, history = LSTM_fit_mult(train_data, lr=lr, NUM_CELLS=NUM_CELLS, EPOCHS=EPOCHS, dp=dp, monitor=True, earlystop=False, verbose=2)
+FILEPATH = f"/LSTM_mult_hist_size_{history_size}"
+plot_train_history(history, title=f'History size={history_size}, dropout={dp}', path=PATH+FILEPATH+'_history.png')
 
 df_future = predict_future_mult(model, data_ts, data_ctg, scaler_ts, scaler_ctg, history_size, target_idx, FIPS=FIPS_total, date_ed=date_ed)
 df_future.to_csv(PATH+f'/LSTM_{TODAY}.csv', index=False)
+
+# for i in range(3):
+#     model, history = LSTM_fit_mult(train_data, val_data, lr=lr, NUM_CELLS=NUM_CELLS, EPOCHS=EPOCHS, dp=dp, monitor=True, verbose=2)
+#     FILEPATH = f"/LSTM_mult_hist_size_{history_size}"
+#     plot_train_history(history, title=f'History size={history_size}, dropout={dp}', path=PATH+FILEPATH+f'_history_{i}.png')
+
+#     df_future = predict_future_mult(model, data_ts, data_ctg, scaler_ts, scaler_ctg, history_size, target_idx, FIPS=FIPS_total, date_ed=date_ed)
+#     df_future.to_csv(PATH+f'/LSTM_mult_hist_size_{history_size}_{TODAY}_{i}.csv', index=False)
 
 # df_fut = [_ for _ in range(3)]
 # for _ in range(3):

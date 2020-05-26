@@ -203,11 +203,15 @@ def _get_TRAIN_SPLIT(history_size, target_size, total_size, split_ratio=0.2):
 
     return int((1-split_ratio)*(total_size-target_size+1)-(1-2*split_ratio)*history_size)+1
 
-def train_val_split(data_ts, data_ctg, target_idx, history_size, target_size, split_ratio=0.2, step_size=1):
+def train_val_split(data_ts, data_ctg, target_idx, history_size, target_size, split_ratio=None, step_size=1):
     """
     """
     total_size = len(data_ts[0])
-    TRAIN_SPLIT = _get_TRAIN_SPLIT(history_size, target_size, total_size, split_ratio=split_ratio)
+    if split_ratio is None:
+        TRAIN_SPLIT = total_size - history_size - target_size
+    else:
+        TRAIN_SPLIT = _get_TRAIN_SPLIT(history_size, target_size, total_size, split_ratio=split_ratio)
+    print('TRAIN_SPLIT:', TRAIN_SPLIT)
 
     assert len(data_ts)==len(data_ctg), "Length of timeseries and categorical data do not match."
 
@@ -226,6 +230,21 @@ def train_val_split(data_ts, data_ctg, target_idx, history_size, target_size, sp
             Ctg_val.append(data_ctg[fips])
 
     return np.asarray(X_train), np.asarray(y_train), np.asarray(X_val), np.asarray(y_val), np.asarray(Ctg_train), np.asarray(Ctg_val)
+
+def train_full(data_ts, data_ctg, target_idx, history_size, target_size, step_size=1):
+    total_size = len(data_ts[0])
+
+    assert len(data_ts)==len(data_ctg), "Length of timeseries and categorical data do not match."
+
+    X_train, y_train, Ctg_train= [], [], []
+
+    for fips in range(len(data_ts)):
+        for i in range(history_size, total_size-target_size+1, step_size):
+            X_train.append(data_ts[fips][i-history_size:i, :])
+            y_train.append(data_ts[fips][i:i+target_size, target_idx])
+            Ctg_train.append(data_ctg[fips])
+
+    return np.asarray(X_train), np.asarray(y_train), np.asarray(Ctg_train)
 
 def get_StandardScaler(X_train, X_ctg):
     scaler_ts, scaler_ctg = StandardScaler(), StandardScaler()
@@ -246,7 +265,7 @@ def normalizer(scaler, X, y=None, target_idx=None):
     
         return X, y
 
-def load_Dataset(X_train, C_train, y_train, X_val, C_val, y_val, BATCH_SIZE=64, BUFFER_SIZE=10000):
+def load_Dataset(X_train, C_train, y_train, X_val=None, C_val=None, y_val=None, BATCH_SIZE=64, BUFFER_SIZE=10000):
     """
     Popular BATCH_SIZE: 32, 64, 128
     Oftentimes smaller BATCH_SIZE perform better
@@ -256,13 +275,16 @@ def load_Dataset(X_train, C_train, y_train, X_val, C_val, y_val, BATCH_SIZE=64, 
     y_tr_data = tf.data.Dataset.from_tensor_slices(y_train)
     train_data = tf.data.Dataset.zip(((X_tr_data, C_tr_data), y_tr_data))
     train_data = train_data.shuffle(BUFFER_SIZE).batch(BATCH_SIZE).cache().repeat()
-    X_v_data = tf.data.Dataset.from_tensor_slices(X_val)
-    C_v_data = tf.data.Dataset.from_tensor_slices(C_val)
-    y_v_data = tf.data.Dataset.from_tensor_slices(y_val)
-    val_data = tf.data.Dataset.zip(((X_v_data, C_v_data), y_v_data))
-    val_data = val_data.shuffle(BUFFER_SIZE).batch(BATCH_SIZE).repeat()
-    
-    return train_data, val_data
+    if X_val is None:
+        return train_data
+    else:
+        X_v_data = tf.data.Dataset.from_tensor_slices(X_val)
+        C_v_data = tf.data.Dataset.from_tensor_slices(C_val)
+        y_v_data = tf.data.Dataset.from_tensor_slices(y_val)
+        val_data = tf.data.Dataset.zip(((X_v_data, C_v_data), y_v_data))
+        val_data = val_data.shuffle(BUFFER_SIZE).batch(BATCH_SIZE).repeat()
+        
+        return train_data, val_data
 
 def quantileLoss(quantile, y_p, y):
     """
@@ -285,7 +307,7 @@ def MultiQuantileLoss(quantiles, target_size, y_p, y):
     a = [y[:,_*target_size:(_+1)*target_size] for _ in range(len(quantiles))]
     return tf.math.reduce_mean([quantileLoss(quantiles[_], y_p, a[_]) for _ in range(len(a))])
 
-def LSTM_fit(train_data, val_data, lr=0.001, NUM_CELLS=128, EPOCHS=10, dp=0.2, monitor=False, earlystop=True, **kwargs):
+def LSTM_fit(train_data, val_data=None, lr=0.001, NUM_CELLS=128, EPOCHS=10, dp=0.2, monitor=False, earlystop=True, **kwargs):
     target_size = train_data.element_spec[1].shape[1]
     
     model_qntl = [SingleLayerConditionalRNN(NUM_CELLS, target_size, dropout=dp) for _ in range(len(quantileList))]
@@ -299,8 +321,11 @@ def LSTM_fit(train_data, val_data, lr=0.001, NUM_CELLS=128, EPOCHS=10, dp=0.2, m
             earlystop = [tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=7, baseline=0.1)]
         else:
             earlystop = None
-        history = model_qntl[i].fit(train_data, epochs=EPOCHS, steps_per_epoch=2500, validation_data=val_data,
-                                    validation_steps=200, callbacks=earlystop, **kwargs)
+        if val_data is None:
+            history = model_qntl[i].fit(train_data, epochs=EPOCHS, steps_per_epoch=2500, callbacks=earlystop, **kwargs)
+        else:
+            history = model_qntl[i].fit(train_data, epochs=EPOCHS, steps_per_epoch=2500, validation_data=val_data,
+                                        validation_steps=200, callbacks=earlystop, **kwargs)
         history_qntl.append(history)
 
     if monitor:
@@ -308,7 +333,7 @@ def LSTM_fit(train_data, val_data, lr=0.001, NUM_CELLS=128, EPOCHS=10, dp=0.2, m
     else:
         return model_qntl
 
-def LSTM_fit_mult(train_data, val_data, lr=0.001, NUM_CELLS=128, EPOCHS=10, dp=0.2, monitor=False, earlystop=True, **kwargs):
+def LSTM_fit_mult(train_data, val_data=None, lr=0.001, NUM_CELLS=128, EPOCHS=10, dp=0.2, monitor=False, earlystop=True, **kwargs):
     target_size = train_data.element_spec[1].shape[1]
     
     model = SingleLayerConditionalRNN(NUM_CELLS, target_size, dropout=dp, quantiles=quantileList)
@@ -320,8 +345,11 @@ def LSTM_fit_mult(train_data, val_data, lr=0.001, NUM_CELLS=128, EPOCHS=10, dp=0
         earlystop = [tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=7, baseline=0.1)]
     else:
         earlystop = None
-    history = model.fit(train_data, epochs=EPOCHS, steps_per_epoch=2500, validation_data=val_data,
-                                validation_steps=200, callbacks=earlystop, **kwargs)
+    if val_data is None:
+        history = model.fit(train_data, epochs=EPOCHS, steps_per_epoch=2500, callbacks=earlystop, **kwargs)
+    else:
+        history = model.fit(train_data, epochs=EPOCHS, steps_per_epoch=2500, validation_data=val_data,
+                                    validation_steps=200, callbacks=earlystop, **kwargs)
 
     if monitor:
         return model, history
@@ -396,14 +424,19 @@ def predict_future_mult(model, data_ts, data_ctg, scaler_ts, scaler_ctg, history
 
 def plot_train_history(history, title='Untitled', path=None):
     loss = history.history['loss']
-    val_loss = history.history['val_loss']
+    is_val_loss = True
+    try:
+        val_loss = history.history['val_loss']
+    except:
+        is_val_loss = False
 
     epochs = range(len(loss))
 
     plt.figure()
 
     plt.plot(epochs, loss, 'b', label='Training loss')
-    plt.plot(epochs, val_loss, 'r', label='Validation loss')
+    if is_val_loss:
+        plt.plot(epochs, val_loss, 'r', label='Validation loss')
     plt.title(title)
     plt.legend()
 
