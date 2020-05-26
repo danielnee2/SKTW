@@ -6,7 +6,7 @@ from tqdm.auto import tqdm
 import git
 
 homedir = git.Repo("./", search_parent_directories=True).working_dir
-csv_to_score = f'{homedir}/submissions/LSTM_0525_hist_size_7.csv'#f'{homedir}/JK/prediction/0509/base_prediction.csv'
+csv_to_score = f'{homedir}/submissions/LSTM_0526_test.csv'#f'{homedir}/JK/prediction/0509/base_prediction.csv'
 
 def get_date(x):
     return '-'.join(x.split('-')[:3])
@@ -34,7 +34,7 @@ def evaluate(test_df, user_df):
         total_loss += pinball_loss(join_df['deaths'].values, join_df[column].values, quantile) / 9.0
     return total_loss
 
-start_date = '2020-05-23' # First date to include in scoring
+start_date = '2020-05-11' # First date to include in scoring
 
 daily_df = pd.read_csv(f'{homedir}/data/us/covid/nyt_us_counties_daily.csv')
 daily_df['fips'] = daily_df['fips'].astype(int)

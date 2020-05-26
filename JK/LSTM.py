@@ -461,13 +461,3 @@ def plot_prediction(model_qntl, val_data, scaler, target_idx, num=3):
             plt.plot(np.arange(len(y_unnm[0])), np.array(prediction), 'o', label=f'Predicted Future, qntl={10*(i+1)}')
         plt.legend(loc='upper left')
         plt.show()
-
-# for i, quantile in enumerate(quantileList):
-#     model = condLSTM(NUM_CELLS, NUM_DAYS_OUT)
-#     model.call([trainingData_time, trainingData_static])
-#     optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
-#     #model.compile(optimizer=optimizer, loss='mae', metrics=['accuracy'])
-#     model.compile(optimizer=optimizer, loss=lambda y_p, y: quantileLoss(quantile, y_p, y))
-#     model.fit(x=[trainingData_time, trainingData_static], y=trainingAns_time,
-#               epochs=epochList[i])
-#     modelList.append(model)
