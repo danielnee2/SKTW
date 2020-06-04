@@ -4,10 +4,7 @@ import pandas as pd
 from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
 import tensorflow as tf
-# from utility import *
 
-# homedir = get_homedir()
-# FIPS_mapping, FIPS_full = get_FIPS(reduced=True)
 quantileList = np.linspace(0.1, 0.9, 9)
 if platform.system()=='Linux': ### In a session
     import matplotlib

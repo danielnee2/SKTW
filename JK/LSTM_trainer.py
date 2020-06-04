@@ -4,8 +4,8 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import tensorflow as tf
-from utility import *
-from LSTM import *
+from .utility import *
+from .LSTM import *
 
 homedir = get_homedir()
 
@@ -29,25 +29,17 @@ step_size = 1
 NUM_CELLS = 128
 lr = 0.001
 dp = 0.2
-EPOCHS = 20
+EPOCHS = 2
 #######################################################################################
 
 with open(PATH_PREP+f'/FIPS.txt', 'r') as f:
     FIPS_total = eval(f.read())
-
-# with open(PATH_PREP+f'/fipsList for dataList.txt', 'r') as f:
-#     FIPS_total = eval(f.read())
 
 data_ctg = np.load(PATH_PREP+f'/data_ctg.npy', allow_pickle=True)
 print(f'Categorical data of shape {data_ctg.shape} is loaded.')
 data_ts = np.load(PATH_PREP+f'/data_ts.npy', allow_pickle=True)
 print(f'Timeseries data of shape {data_ts.shape} is loaded.')
 data_ts = data_ts[:, :-timedelta, :]
-
-# data_ctg = np.load(PATH_PREP+f'/dataList_static.npy', allow_pickle=True)
-# print(f'Categorical data of shape {data_ctg.shape} is loaded.')
-# data_ts = np.load(PATH_PREP+f'/dataList_time.npy', allow_pickle=True)
-# print(f'Timeseries data of shape {data_ts.shape} is loaded.')
 
 with open(PATH_PREP+f'/columns_ctg.txt', 'r') as f:
     columns_ctg = eval(f.read())
@@ -87,6 +79,15 @@ for i in range(3):
     model, history = LSTM_fit_mult(train_data, lr=lr, NUM_CELLS=NUM_CELLS, EPOCHS=EPOCHS, dp=dp, monitor=True, earlystop=False, verbose=2)
     FILEPATH = f"/LSTM_mult_hist_size_{history_size}"
     plot_train_history(history, title=f'History size={history_size}, dropout={dp}', path=PATH+FILEPATH+f'_history_{i}.png')
+    model.save_weights(PATH+FILEPATH+f'_weights', save_format="tf")
 
     df_future = predict_future_mult(model, data_ts, data_ctg, scaler_ts, scaler_ctg, history_size, target_idx, FIPS=FIPS_total, date_ed=date_ed-pd.Timedelta(days=timedelta))
     df_future.to_csv(PATH+f'/LSTM_mult_hist_size_{history_size}_{TODAY}_{i}.csv', index=False)
+
+    model_test = SingleLayerConditionalRNN(NUM_CELLS, target_size, dp, quantileList)
+    optimizer = tf.keras.optimizers.Adam(learning_rate=lr)
+    model_test.compile(optimizer=optimizer, loss=lambda y_p, y: MultiQuantileLoss(quantileList, target_size, y_p, y))
+    load_status = model_test.load_weights(PATH+FILEPATH+f'_weights')
+    # print(load_status.assert_consumed())
+    df_future_test = predict_future_mult(model_test, data_ts, data_ctg, scaler_ts, scaler_ctg, history_size, target_idx, FIPS=FIPS_total, date_ed=date_ed-pd.Timedelta(days=timedelta))
+    df_future_test.to_csv(PATH+f'/LSTM_mult_hist_size_{history_size}_{TODAY}_{i}_test.csv', index=False)
