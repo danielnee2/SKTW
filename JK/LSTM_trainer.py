@@ -9,29 +9,29 @@ from .LSTM import *
 
 homedir = get_homedir()
 
-TODAY = '0526' # date of today, in the form of string. It signifies which folder in JK/preprocessing to be trained.
-date_ed = pd.Timestamp('2020-05-23') # end date to be included in the training. in the form of pandas Timestamp. 
-                                     # should be the same as an output of DataCleaner.py.
-# date_ed = pd.Timestamp('2020-05-24')
-timedelta = 13
+TODAY = '0526' # Date of today. Only used in defining PATH_PREP variable(= which folder to search for data)
 
-PATH_PREP = f"{homedir}/JK/preprocessing/{TODAY}"
-PATH = f"{homedir}/JK/prediction/{TODAY}_test"
+PATH_PREP = f"{homedir}/JK/preprocessing/{TODAY}" # Which folder to search for the preprocessed data.
+PATH = f"{homedir}/JK/prediction/{TODAY}_test"         # All outputs will be saved in this folder.
 
-# PATH_PREP = f"{homedir}/JK/HC"
-# PATH = f"{homedir}/JK/prediction/{TODAY}_HC"
-
-split_ratio = None
-QUANTILE = list(quantileList)
-history_size = 7
-target_size = 14
-step_size = 1
-NUM_CELLS = 128
-lr = 0.001
-dp = 0.2
-EPOCHS = 2
+with open(PATH_PREP+f'/date_ed.txt', 'r') as f:
+    date_ed = pd.Timestamp(f.read()) # Last date in the preprocessed data. 
+                                     # Same as the final date to be trained in the previous cell.
+timedelta = 0 # How many dates from date_ed not to be included in training.
+              # Only necessary for using custom training timeline.
+split_ratio = None              # Training-validation splitting ratio
+QUANTILE = list(quantileList)   
+history_size = 7                # Size of history window
+target_size = 14                # Size of target window
+step_size = 1                   
+NUM_CELLS = 128                 # Number of cells in LSTM layer
+lr = 0.001                      # Learning rate
+dp = 0.2                        # Dropout rate
+EPOCHS = 100                    # Number of epochs for training
 #######################################################################################
-
+"""
+Load necessary data from PATH_PREP.
+"""
 with open(PATH_PREP+f'/FIPS.txt', 'r') as f:
     FIPS_total = eval(f.read())
 
@@ -55,6 +55,9 @@ try:
 except OSError as error:
     print(error)
 
+"""
+Generate the training data, an instance of tensorflow.Dataset class.
+"""
 # X_train, y_train, X_val, y_val, C_train, C_val = train_val_split(data_ts, data_ctg, target_idx, history_size, target_size, split_ratio=split_ratio, step_size=step_size)
 X_train, y_train, C_train = train_full(data_ts, data_ctg, target_idx, history_size, target_size, step_size=step_size)
 
@@ -74,7 +77,9 @@ train_data = load_Dataset(X_train, C_train, y_train)
 
 # df_future = predict_future_mult(model, data_ts, data_ctg, scaler_ts, scaler_ctg, history_size, target_idx, FIPS=FIPS_total, date_ed=date_ed)
 # df_future.to_csv(PATH+f'/LSTM_{TODAY}.csv', index=False)
-
+"""
+Train the model and forecast.
+"""
 for i in range(3):
     model, history = LSTM_fit_mult(train_data, lr=lr, NUM_CELLS=NUM_CELLS, EPOCHS=EPOCHS, dp=dp, monitor=True, earlystop=False, verbose=2)
     FILEPATH = f"/LSTM_mult_hist_size_{history_size}"

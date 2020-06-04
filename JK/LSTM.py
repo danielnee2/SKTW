@@ -70,7 +70,10 @@ class LRFinder(tf.keras.callbacks.Callback):
             fig.savefig(path)
 
 class ConditionalRNN(tf.keras.layers.Layer):
-    
+    """
+    Custom conditional RNN layer.
+    Credit to Philippe Rémy(https://github.com/philipperemy/cond_rnn.git)
+    """
     # Arguments to the RNN like return_sequences, return_state...
     def __init__(self, units, cell=tf.keras.layers.LSTMCell, dropout=0.0, *args,
                  **kwargs):
@@ -136,6 +139,8 @@ class ConditionalRNN(tf.keras.layers.Layer):
         In the case of a list, the tensors can have a different cond_dim.
         :return: outputs, states or outputs (if return_state=False)
         """
+        if isinstance(inputs, tuple):
+            inputs = list(inputs)
         assert isinstance(inputs, list) and len(inputs) >= 2, f"{inputs}"
         x = inputs[0]
         cond = inputs[1:]
@@ -191,10 +196,10 @@ def _get_TRAIN_SPLIT(history_size, target_size, total_size, split_ratio=0.2):
         Total number of sample dates.
       split_ratio: int (default=0.2)
         K-fold ratio of train-validation split.
-    
+
     Return:
       TRAIN_SPLIT: int
-        Splitting date = number of training dates.
+        # training dates (= index of splitting).
     """
     assert total_size>=2*history_size+target_size-1+(2/split_ratio), 'History and Target sizes are too large.'
 
@@ -202,6 +207,28 @@ def _get_TRAIN_SPLIT(history_size, target_size, total_size, split_ratio=0.2):
 
 def train_val_split(data_ts, data_ctg, target_idx, history_size, target_size, split_ratio=None, step_size=1):
     """
+    Train-validation split.
+
+    Parameters:
+      data_ts: numpy ndarray
+        Timeseries data of shape (# FIPS, length of timeline, # features)
+      data_ctg: numpy ndarray
+        Categorical data of shape (# FIPS, # features)
+      target_idx: int
+        Index of the target feature in data_ts.
+      history_size: int
+        Size of history window.
+      target_size: int
+        Size of target window.
+      split_ratio: int (default=0.2)
+        K-fold ratio of train-validation split.
+      step_size: int (default=1)
+
+    Return:
+      X_train, C_train, y_train: numpy ndarray
+        Timeseries, categorical, and target training data.
+      X_val, C_val, y_val: numpy ndarray
+        Timeseries, categorical, and target validation data.
     """
     total_size = len(data_ts[0])
     if split_ratio is None:
@@ -214,36 +241,67 @@ def train_val_split(data_ts, data_ctg, target_idx, history_size, target_size, sp
 
     X_train, y_train = [], []
     X_val, y_val = [], []
-    Ctg_train, Ctg_val = [], []
+    C_train, C_val = [], []
 
     for fips in range(len(data_ts)):
         for i in range(history_size, TRAIN_SPLIT, step_size):
             X_train.append(data_ts[fips][i-history_size:i, :])
             y_train.append(data_ts[fips][i:i+target_size, target_idx])
-            Ctg_train.append(data_ctg[fips])
+            C_train.append(data_ctg[fips])
         for i in range(TRAIN_SPLIT+history_size, total_size-target_size+1, step_size):
             X_val.append(data_ts[fips][i-history_size:i, :])
             y_val.append(data_ts[fips][i:i+target_size, target_idx])
-            Ctg_val.append(data_ctg[fips])
+            C_val.append(data_ctg[fips])
 
-    return np.asarray(X_train), np.asarray(y_train), np.asarray(X_val), np.asarray(y_val), np.asarray(Ctg_train), np.asarray(Ctg_val)
+    return np.asarray(X_train), np.asarray(y_train), np.asarray(X_val), np.asarray(y_val), np.asarray(C_train), np.asarray(C_val)
 
 def train_full(data_ts, data_ctg, target_idx, history_size, target_size, step_size=1):
+    """
+    Generate full training data for final model.
+
+    Parameters:
+      data_ts: numpy ndarray
+        Timeseries data of shape (# FIPS, # features)
+      data_ctg: numpy ndarray
+        Categorical data of shape (# FIPS, # features)
+      target_idx: int
+        Index of the target feature in data_ts.
+      history_size: int
+        Size of history window.
+      target_size: int
+        Size of target window.
+      step_size: int (default=1)
+
+    Return:
+      X_train, C_train, y_train: numpy ndarray
+        Timeseries, categorical, and target training data.
+    """
     total_size = len(data_ts[0])
 
     assert len(data_ts)==len(data_ctg), "Length of timeseries and categorical data do not match."
 
-    X_train, y_train, Ctg_train= [], [], []
+    X_train, y_train, C_train= [], [], []
 
     for fips in range(len(data_ts)):
         for i in range(history_size, total_size-target_size+1, step_size):
             X_train.append(data_ts[fips][i-history_size:i, :])
             y_train.append(data_ts[fips][i:i+target_size, target_idx])
-            Ctg_train.append(data_ctg[fips])
+            C_train.append(data_ctg[fips])
 
-    return np.asarray(X_train), np.asarray(y_train), np.asarray(Ctg_train)
+    return np.asarray(X_train), np.asarray(y_train), np.asarray(C_train)
 
 def get_StandardScaler(X_train, X_ctg):
+    """
+    Instantiate and fit StandardScaler.
+
+    Parameters:
+      X_train, X_ctg: numpy ndarray
+        Timeseries and categorical data of shape (# FIPS, length of timeline, # features).
+
+    Return:
+      scaler_ts, scaler_ctg: scikit-learn StandardScaler
+        StandardScaler object fitted to X_train(resp. X_ctg).
+    """
     scaler_ts, scaler_ctg = StandardScaler(), StandardScaler()
     scaler_ts.fit(np.vstack(X_train).astype(np.float32))
     scaler_ctg.fit(X_ctg.astype(np.float32))
@@ -251,6 +309,22 @@ def get_StandardScaler(X_train, X_ctg):
     return scaler_ts, scaler_ctg
 
 def normalizer(scaler, X, y=None, target_idx=None):
+    """
+    Z-score the data.
+
+    Parameters:
+      scaler: scikit-learn StandardScaler
+        Fitted StandardScaler object.
+      X: numpy ndarray
+        Either timeseries or categorical data.
+      y: numpy ndarray (default=None)
+        Target data.
+      target_idx: int (default=None)
+        Index of the target feature in X.
+    
+    Return:
+      Z-scored X (and y if target_idx is given)
+    """
     if target_idx is None:
         X = scaler.transform(X)
         return X
@@ -264,8 +338,22 @@ def normalizer(scaler, X, y=None, target_idx=None):
 
 def load_Dataset(X_train, C_train, y_train, X_val=None, C_val=None, y_val=None, BATCH_SIZE=64, BUFFER_SIZE=10000):
     """
-    Popular BATCH_SIZE: 32, 64, 128
-    Oftentimes smaller BATCH_SIZE perform better
+    Generate training and validation datasets in the format of tensorflow Dataset class.
+
+    Parameters:
+      X_train, C_train, y_train: numpy ndarray
+        Timeseries, categorical, and target training data.
+      X_val, C_val, y_val: numpy ndarray (default=None)
+        Timeseries, categorical, and target validation data.
+      BATCH_SIZE: int (default=64)
+        Size of each batch.
+        Popular BATCH_SIZE: 32, 64, 128
+        Oftentimes smaller BATCH_SIZE perform better.
+      BUFFER_SIZE: int (default=10000)
+        Size of buffer. Determines the quality of permutation.
+
+    Return:
+      train_data, val_data: tensorflow Dataset
     """
     X_tr_data = tf.data.Dataset.from_tensor_slices(X_train)
     C_tr_data = tf.data.Dataset.from_tensor_slices(C_train)
@@ -285,19 +373,28 @@ def load_Dataset(X_train, C_train, y_train, X_val=None, C_val=None, y_val=None, 
 
 def quantileLoss(quantile, y_p, y):
     """
-    Costum loss function for quantile forecast models.
+    Custum loss function for quantile forecast models.
     Intended usage:
     >>> loss=lambda y_p, y: quantileLoss(quantile, y_p, y)
     in compile step.
 
     Parameters:
       quantile: float in [0,1]
-        Quantile number
+        Quantile number.
     """
     e = y_p - y
     return tf.math.reduce_mean(tf.math.maximum(quantile*e, (quantile-1)*e))
 
 def MultiQuantileLoss(quantiles, target_size, y_p, y):
+    """
+    quantileLoss adapted for multi-output conditional RNN.
+
+    Parameters:
+      quantiles: list of floats in [0,1]
+        List of quantiles.
+      target_size: int
+        Size of target window.
+    """
     # assert y_p.shape[-1] == y.shape[-1]*len(quantiles), f"{y_p.shape}, {y.shape}"
     # a = tf.reshape(y_p, [len(quantiles)]+y.shape)
 
@@ -305,6 +402,35 @@ def MultiQuantileLoss(quantiles, target_size, y_p, y):
     return tf.math.reduce_mean([quantileLoss(quantiles[_], y_p, a[_]) for _ in range(len(a))])
 
 def LSTM_fit(train_data, val_data=None, lr=0.001, NUM_CELLS=128, EPOCHS=10, dp=0.2, monitor=False, earlystop=True, **kwargs):
+    """
+    Build and fit the conditional LSTM model.
+
+    Parameters:
+      train_data: tensorflow Dataset
+        Training dataset.
+      val_data: tensorflow Dataset (default=None)
+        Validation dataset, optional.
+      lr: float (default=0.001)
+        Learning rate.
+      NUM_CELLS: int (default=128)
+        Number of cells in LSTM layer.
+      EPOCHS: int (default=10)
+        Number of epochs for training.
+      df: float in [0,1] (default=0.2)
+        Dropout rate.
+      monitor: bool (default=False)
+        True if return the history of model fitting.
+      earlystop: bool (default=False)
+        True if exploit early stopping criterion.
+      **kwargs:
+        Additional kwargs are passed to tensorflow Model.
+
+    Return:
+      model_qntl: list of tensorflow Model
+        List of fitted conditional LSTM models.
+      history_qntl: list of tensorflow History
+        List of the history of model fitting.
+    """
     target_size = train_data.element_spec[1].shape[1]
     
     model_qntl = [SingleLayerConditionalRNN(NUM_CELLS, target_size, dropout=dp) for _ in range(len(quantileList))]
@@ -331,13 +457,42 @@ def LSTM_fit(train_data, val_data=None, lr=0.001, NUM_CELLS=128, EPOCHS=10, dp=0
         return model_qntl
 
 def LSTM_fit_mult(train_data, val_data=None, lr=0.001, NUM_CELLS=128, EPOCHS=10, dp=0.2, monitor=False, earlystop=True, **kwargs):
+    """
+    Build and fit the multi-output conditional LSTM model.
+
+    Parameters:
+      train_data: tensorflow Dataset
+        Training dataset.
+      val_data: tensorflow Dataset (default=None)
+        Validation dataset, optional.
+      lr: float (default=0.001)
+        Learning rate.
+      NUM_CELLS: int (default=128)
+        Number of cells in LSTM layer.
+      EPOCHS: int (default=10)
+        Number of epochs for training.
+      df: float in [0,1] (default=0.2)
+        Dropout rate.
+      monitor: bool (default=False)
+        True if return the history of model fitting.
+      earlystop: bool (default=False)
+        True if exploit early stopping criterion.
+      **kwargs:
+        Additional kwargs are passed to tensorflow Model.
+
+    Return:
+      model: tensorflow Model
+        Fitted multi-output conditional LSTM models.
+      history: tensorflow History
+        The history of model fitting.
+    """
     target_size = train_data.element_spec[1].shape[1]
     
     model = SingleLayerConditionalRNN(NUM_CELLS, target_size, dropout=dp, quantiles=quantileList)
     optimizer = tf.keras.optimizers.Adam(learning_rate=lr)
 
     model.compile(optimizer=optimizer, loss=lambda y_p, y: MultiQuantileLoss(quantileList, target_size, y_p, y))
-    print('Training multi-quantile model.')
+    print('Training multi-output model.')
     if earlystop:
         earlystop = [tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=7, baseline=0.1)]
     else:
@@ -369,6 +524,28 @@ def LSTM_finder(train_data, val_data, lr=0.001, NUM_CELLS=128, EPOCHS=10, dp=0.2
     return lr_finder
 
 def predict_future(model_qntl, data_ts, data_ctg, scaler_ts, scaler_ctg, history_size, target_idx, FIPS=None, date_ed=None):
+    """
+    Forecast the future using the fitted conditional LSTM model.
+
+    Parameters:
+      model_qntl: list of tensorflow Model
+        Fitted conditional LSTM models.
+      data_ts, data_ctg: numpy ndarray
+        Timeseries and categorical data with respect to the last history window.
+      scaler_ts, scaler_ctg: scikit-learn StandardScaler
+        Fitted StandardScaler. Needed to undo the Z-scoring.
+      history_size: int
+        Size of history window.
+      target_idx: int
+        Index of the target feature in data_ts.
+      FIPS: list (default=None)
+        List of county FIPS, sorted to match with the datasets.
+      date_ed: pandas Timestamp
+        Last date in data_ts(= one day before the start date of forecast).
+
+    Return:
+        pandas Dataframe of the prediction in tidy format.
+    """
     mu, sigma = scaler_ts.mean_[target_idx], scaler_ts.scale_[target_idx]
 
     X_future = [data[-history_size:, :] for data in data_ts]; X_future = np.asarray(X_future)
@@ -395,6 +572,28 @@ def predict_future(model_qntl, data_ts, data_ctg, scaler_ts, scaler_ctg, history
         return pd.DataFrame(df_future, columns=['date', 'fips']+list(range(10, 100, 10)))
 
 def predict_future_mult(model, data_ts, data_ctg, scaler_ts, scaler_ctg, history_size, target_idx, FIPS=None, date_ed=None):
+    """
+    Forecast the future using the fitted multi-output conditional LSTM model.
+
+    Parameters:
+      model: tensorflow Model
+        Fitted multi-output conditional LSTM models.
+      data_ts, data_ctg: numpy ndarray
+        Timeseries and categorical data with respect to the last history window.
+      scaler_ts, scaler_ctg: scikit-learn StandardScaler
+        Fitted StandardScaler. Needed to undo the Z-scoring.
+      history_size: int
+        Size of history window.
+      target_idx: int
+        Index of the target feature in data_ts.
+      FIPS: list (default=None)
+        List of county FIPS, sorted to match with the datasets.
+      date_ed: pandas Timestamp
+        Last date in data_ts(= one day before the start date of forecast).
+
+    Return:
+        pandas Dataframe of the prediction in tidy format.
+    """
     mu, sigma = scaler_ts.mean_[target_idx], scaler_ts.scale_[target_idx]
 
     X_future = [data[-history_size:, :] for data in data_ts]; X_future = np.asarray(X_future)
@@ -420,6 +619,17 @@ def predict_future_mult(model, data_ts, data_ctg, scaler_ts, scaler_ctg, history
         return pd.DataFrame(df_future, columns=['date', 'fips']+list(range(10, 100, 10)))
 
 def plot_train_history(history, title='Untitled', path=None):
+    """
+    Plot the learning curve.
+
+    Parameters:
+      history: tensorflow History
+        History of model fitting.
+      title: str (default='Untitled')
+        Title of the figure.
+      path: str (default=None)
+        Path to save the learning curve. Set None to show instead of save the figure.
+    """
     loss = history.history['loss']
     is_val_loss = True
     try:

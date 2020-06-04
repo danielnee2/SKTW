@@ -33,7 +33,7 @@ for dic in po_st:
     st_to_fips[dic['state']] = dic['fips']
 
 """
-Read the datasets.
+Read the datas.
 """
 berkeley = pd.read_csv(PATH_DEMO, index_col=0)
 berkeley['countyFIPS'] = berkeley['countyFIPS'].apply(correct_FIPS)
@@ -186,7 +186,6 @@ print('First date to be trained:', date_st, ', Final date to be trained:', date_
 
 """
 Generate training data
-in the order of demo-motal-mobi
 """
 if PREPROCESSING:
     data_ts = []
@@ -234,4 +233,6 @@ if PREPROCESSING:
     np.save(f'{homedir}/JK/preprocessing/{md_now}/data_ts.npy', np.asarray(data_ts, dtype=np.float32))
     with open(f'{homedir}/JK/preprocessing/{md_now}/FIPS.txt', 'w') as f:
         print(sorted(FIPS_demo), file=f)
+    with open(f'{homedir}/JK/preprocessing/{md_now}/date_ed.txt', 'w') as f:
+        print(date_ed.strftime('%Y-%m-%d'), file=f)
     print('Preprocessing finished.')
