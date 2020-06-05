@@ -3,8 +3,10 @@ import numpy as np
 import sys
 import traceback
 from tqdm.auto import tqdm
+import git
 
-csv_to_score = '../sample_submission.csv'
+homedir = git.Repo("./", search_parent_directories=True).working_dir
+csv_to_score = f'{homedir}/submissions/LSTM_0526_test.csv'#f'{homedir}/JK/prediction/0509/base_prediction.csv'
 
 def get_date(x):
     return '-'.join(x.split('-')[:3])
@@ -32,16 +34,18 @@ def evaluate(test_df, user_df):
         total_loss += pinball_loss(join_df['deaths'].values, join_df[column].values, quantile) / 9.0
     return total_loss
 
-start_date = '2020-04-24' # First date to include in scoring
+start_date = '2020-05-11' # First date to include in scoring
 
-daily_df = pd.read_csv('../data/us/covid/nyt_us_counties_daily.csv')
+daily_df = pd.read_csv(f'{homedir}/data/us/covid/nyt_us_counties_daily.csv')
 daily_df['fips'] = daily_df['fips'].astype(int)
 end_date = daily_df['date'].max()
 daily_df['id'] = daily_df['date'] +'-'+ daily_df['fips'].astype(str)
 preperiod_df = daily_df[(daily_df['date'] < start_date)]
 daily_df = daily_df[(daily_df['date'] <= end_date)  & (daily_df['date'] >= start_date)]
 
-sample_submission = pd.read_csv('../sample_submission.csv') # Load the sample submission with all 0's
+fips_over0 = set(daily_df[daily_df['deaths']>0]['fips'])
+
+sample_submission = pd.read_csv(f'{homedir}/sample_submission.csv') # Load the sample submission with all 0's
 sample_submission['date'] = sample_submission['id'].apply(get_date)
 sample_submission['fips'] = sample_submission['id'].apply(get_fips).astype('int')
 sample_submission = sample_submission[(sample_submission['date'] <= end_date)  & (sample_submission['date'] >= start_date)]
@@ -73,6 +77,8 @@ all_fips = set(sample_submission.fips.unique())
 covid_active_fips = prev_active_fips.intersection(all_fips).intersection(curr_active_fips) - disabled_fips
 inactive_fips = all_fips - prev_active_fips - curr_active_fips - disabled_fips
 new_active_fips = (curr_active_fips - prev_active_fips).intersection(all_fips) - disabled_fips
+
+print(len(prev_active_fips), len(covid_active_fips), len(inactive_fips), len(new_active_fips))
 
 # Create a DataFrame of all 0's for inactive fips by getting those from sample submission.
 inactive_df = sample_submission.set_index('fips')[['id','50']].loc[inactive_fips]
