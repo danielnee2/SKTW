@@ -4,8 +4,8 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import tensorflow as tf
-from .utility import *
-from .LSTM import *
+from utility import *
+from LSTM import *
 
 homedir = get_homedir()
 

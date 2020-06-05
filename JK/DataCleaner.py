@@ -3,7 +3,10 @@ import json
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from .utility import *
+if __name__ == '__main__':
+    from utility import *
+else:
+    from .utility import *
 
 homedir = get_homedir()
 

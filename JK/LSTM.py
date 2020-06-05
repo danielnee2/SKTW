@@ -359,7 +359,7 @@ def load_Dataset(X_train, C_train, y_train, X_val=None, C_val=None, y_val=None, 
     C_tr_data = tf.data.Dataset.from_tensor_slices(C_train)
     y_tr_data = tf.data.Dataset.from_tensor_slices(y_train)
     train_data = tf.data.Dataset.zip(((X_tr_data, C_tr_data), y_tr_data))
-    train_data = train_data.shuffle(BUFFER_SIZE).batch(BATCH_SIZE).cache().repeat()
+    train_data = train_data.cache().shuffle(BUFFER_SIZE).batch(BATCH_SIZE).repeat()
     if X_val is None:
         return train_data
     else:
@@ -616,7 +616,7 @@ def predict_future_mult(model, data_ts, data_ctg, scaler_ts, scaler_ctg, history
             for j in range(target_size):
                 df_future.append([date_ed+pd.Timedelta(days=1+j), fips]+prediction_future[:,i,j].tolist())
 
-        return pd.DataFrame(df_future, columns=['date', 'fips']+list(range(10, 100, 10)))
+        return pd.DataFrame(df_future, columns=['date', 'fips']+[str(10*i) for i in range(1,10)])
 
 def plot_train_history(history, title='Untitled', path=None):
     """
